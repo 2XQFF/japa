@@ -30,7 +30,7 @@ body {
 
 .search-panel {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto minmax(260px, 1.6fr) auto;
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, 1.6fr) auto;
   gap: 18px;
   align-items: end;
   padding: 24px 0 22px;
@@ -49,36 +49,6 @@ h1 {
   font-size: 34px;
   line-height: 1.15;
   font-weight: 800;
-}
-
-.dictionary-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--panel);
-}
-
-.dictionary-tabs button {
-  min-width: 84px;
-  min-height: 48px;
-  border: 0;
-  border-left: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  cursor: pointer;
-}
-
-.dictionary-tabs button:first-child {
-  border-left: 0;
-}
-
-.dictionary-tabs button.active {
-  background: var(--ink);
-  color: white;
-  font-weight: 700;
 }
 
 .search-box {
@@ -135,10 +105,6 @@ input:focus {
   font-weight: 700;
 }
 
-.filters.hidden {
-  display: none;
-}
-
 .status {
   grid-column: 1 / -1;
   min-height: 24px;
@@ -164,44 +130,6 @@ input:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-}
-
-.word-card {
-  display: grid;
-  grid-template-columns: minmax(190px, 0.8fr) minmax(0, 2fr);
-  gap: 20px;
-  min-height: 150px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-}
-
-.word-main {
-  display: grid;
-  align-content: center;
-  border-radius: 8px;
-  background: #eaf2ee;
-  padding: 18px;
-}
-
-.writing {
-  font-family: "Yu Mincho", "MS Mincho", serif;
-  font-size: 46px;
-  line-height: 1.15;
-  overflow-wrap: anywhere;
-}
-
-.reading {
-  margin-top: 10px;
-  color: var(--accent-dark);
-  font-size: 20px;
-  font-weight: 800;
-  overflow-wrap: anywhere;
-}
-
-.word-details {
-  align-content: center;
 }
 
 .kanji-block {
@@ -276,8 +204,7 @@ footer {
     grid-template-columns: 1fr;
   }
 
-  .card,
-  .word-card {
+  .card {
     grid-template-columns: 1fr;
   }
 

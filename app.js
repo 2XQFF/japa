@@ -1,8 +1,6 @@
 const state = {
-  dictionary: "kanji",
   mode: "auto",
   records: [],
-  jukujikun: [],
   byLiteral: new Map(),
   oldToNew: new Map(),
 };
@@ -12,10 +10,7 @@ const els = {
   status: document.querySelector("#status"),
   results: document.querySelector("#results"),
   template: document.querySelector("#card-template"),
-  jukujikunTemplate: document.querySelector("#jukujikun-template"),
   filters: document.querySelectorAll("[data-mode]"),
-  filterGroup: document.querySelector(".filters"),
-  dictionaries: document.querySelectorAll("[data-dictionary]"),
 };
 
 function kanaFold(value) {
@@ -30,10 +25,6 @@ function cleanReading(value) {
 
 function labelList(values, empty = "자료 없음") {
   return values && values.length ? values.join(" · ") : empty;
-}
-
-function normalizeKanji(value) {
-  return [...value].map((char) => state.oldToNew.get(char) || char).join("");
 }
 
 function buildSearchText(record) {
@@ -115,61 +106,7 @@ function renderCard(hit) {
   return node;
 }
 
-function findJukujikunMatches(rawQuery) {
-  const query = rawQuery.trim();
-  if (!query) return [];
-
-  const normalizedQuery = normalizeKanji(query);
-  const foldedQuery = cleanReading(query.toLowerCase());
-
-  return state.jukujikun
-    .filter((record) => {
-      const text = [
-        record.writing,
-        record.normalizedWriting,
-        ...record.readings,
-        ...record.allReadings,
-        ...record.meanings,
-      ]
-        .join(" ")
-        .toLowerCase();
-      const readings = cleanReading([...record.readings, ...record.allReadings].join(" ").toLowerCase());
-      return (
-        text.includes(query.toLowerCase()) ||
-        text.includes(normalizedQuery.toLowerCase()) ||
-        readings.includes(foldedQuery)
-      );
-    })
-    .slice(0, 100);
-}
-
-function renderJukujikunCard(record) {
-  const node = els.jukujikunTemplate.content.firstElementChild.cloneNode(true);
-  node.querySelector(".writing").textContent = record.writing;
-  node.querySelector(".reading").textContent = labelList(record.readings);
-  node.querySelector(".word-meanings").textContent = labelList(record.meanings);
-  node.querySelector(".word-readings").textContent = labelList(
-    record.allReadings.filter((reading) => !record.readings.includes(reading))
-  );
-  node.querySelector(".word-info").textContent = labelList([...record.info, ...record.misc]);
-  node.querySelector(".word-priority").textContent = labelList(record.priority);
-  return node;
-}
-
 function render() {
-  if (state.dictionary === "jukujikun") {
-    const hits = findJukujikunMatches(els.query.value);
-    els.results.replaceChildren(...hits.map(renderJukujikunCard));
-    if (!els.query.value.trim()) {
-      els.status.textContent = `${state.jukujikun.length.toLocaleString()}개 숙자훈 항목 수록. 예: 今日, 明日, 躑躅, つつじ`;
-    } else if (hits.length) {
-      els.status.textContent = `${hits.length.toLocaleString()}개 결과`;
-    } else {
-      els.status.textContent = "검색 결과가 없습니다.";
-    }
-    return;
-  }
-
   const hits = findMatches(els.query.value);
   els.results.replaceChildren(...hits.map(renderCard));
   if (!els.query.value.trim()) {
@@ -181,25 +118,10 @@ function render() {
   }
 }
 
-function setDictionary(dictionary) {
-  state.dictionary = dictionary;
-  els.dictionaries.forEach((item) => item.classList.toggle("active", item.dataset.dictionary === dictionary));
-  els.filterGroup.classList.toggle("hidden", dictionary !== "kanji");
-  els.query.placeholder =
-    dictionary === "kanji" ? "예: 亞, 亜, ア, あ, ひがし" : "예: 今日, 明日, 躑躅, つつじ";
-  els.query.value = "";
-  render();
-}
-
 async function init() {
-  const [kanjiResponse, jukujikunResponse] = await Promise.all([
-    fetch("data/kanji.json"),
-    fetch("data/jukujikun.json"),
-  ]);
-  const payload = await kanjiResponse.json();
-  const jukujikunPayload = await jukujikunResponse.json();
+  const response = await fetch("data/kanji.json");
+  const payload = await response.json();
   state.records = payload.records;
-  state.jukujikun = jukujikunPayload.records;
   state.byLiteral = new Map(payload.records.map((record) => [record.literal, record]));
   state.oldToNew = new Map(Object.entries(payload.oldToNew));
   render();
@@ -212,9 +134,6 @@ els.filters.forEach((button) => {
     els.filters.forEach((item) => item.classList.toggle("active", item === button));
     render();
   });
-});
-els.dictionaries.forEach((button) => {
-  button.addEventListener("click", () => setDictionary(button.dataset.dictionary));
 });
 
 init().catch((error) => {
