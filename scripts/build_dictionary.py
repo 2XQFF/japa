@@ -29,16 +29,26 @@ def unique(values):
     return out
 
 
+def is_cjk(char):
+    code = ord(char)
+    return (
+        0x3400 <= code <= 0x9FFF
+        or 0xF900 <= code <= 0xFAFF
+        or 0x20000 <= code <= 0x2FA1F
+    )
+
+
 def normalize_reading(value):
     return value.replace(".", "").replace("-", "").strip()
 
 
-def load_joyo_readings():
+def load_joyo_table():
     if not JOYO_READINGS_SOURCE.exists():
         raise SystemExit(f"Missing {JOYO_READINGS_SOURCE}. Download joyo-readings.json first.")
 
     data = json.loads(JOYO_READINGS_SOURCE.read_text(encoding="utf-8"))
     readings = {}
+    traditional_forms = {}
     for item in data:
         literal = item["漢字"]["通用字体"]
         on = set()
@@ -52,7 +62,12 @@ def load_joyo_readings():
             else:
                 kun.add(value)
         readings[literal] = {"on": on, "kun": kun}
-    return readings
+        traditional_forms[literal] = unique(
+            char
+            for char in item["漢字"].get("康熙字典体", "")
+            if is_cjk(char) and char != literal
+        )
+    return readings, traditional_forms
 
 
 def mark_readings(values, official_values):
@@ -67,7 +82,7 @@ def main():
     if not SOURCE.exists():
         raise SystemExit(f"Missing {SOURCE}. Download kanjidic2.xml.gz first.")
 
-    joyo_readings = load_joyo_readings()
+    joyo_readings, traditional_forms = load_joyo_table()
 
     with gzip.open(SOURCE, "rb") as fh:
         root = ET.parse(fh).getroot()
@@ -87,7 +102,6 @@ def main():
                 ucs_to_literal[value.lower()] = literal
 
     records = []
-    variant_pairs = set()
 
     for char in characters:
         literal = text(char.find("literal"))
@@ -106,7 +120,6 @@ def main():
                     variant_literal = ucs_to_literal.get(value.lower())
                 if variant_literal and variant_literal != literal:
                     variants.append(variant_literal)
-                    variant_pairs.add(tuple(sorted((literal, variant_literal))))
 
         ja_on = []
         ja_kun = []
@@ -141,45 +154,24 @@ def main():
             }
         )
 
-    by_literal = {record["literal"]: record for record in records}
-
-    def modern_score(record):
-        score = 0
-        grade = record.get("grade")
-        if grade is not None and grade < 10:
-            score += 1000 - grade
-        if record.get("frequency") is not None:
-            score += 400
-        if record.get("jlpt") is not None:
-            score += 200
-        if grade == 10:
-            score -= 100
-        return score
-
-    old_to_new_candidates = {}
-    for left, right in sorted(variant_pairs):
-        left_record = by_literal[left]
-        right_record = by_literal[right]
-        if modern_score(left_record) == modern_score(right_record):
-            continue
-        old, new = (right, left) if modern_score(left_record) > modern_score(right_record) else (left, right)
-        old_to_new_candidates.setdefault(old, set()).add(new)
-
-    old_to_new = {
-        old: sorted(
-            candidates,
-            key=lambda literal: (-modern_score(by_literal[literal]), literal),
-        )[0]
-        for old, candidates in old_to_new_candidates.items()
-    }
-
     joyo_records = [record for record in records if record.get("grade") in JOYO_GRADES]
     joyo_literals = {record["literal"] for record in joyo_records}
 
-    old_to_new = {old: new for old, new in old_to_new.items() if new in joyo_literals}
+    old_to_new = {
+        old: new
+        for new, old_forms in traditional_forms.items()
+        if new in joyo_literals
+        for old in old_forms
+    }
 
     for record in joyo_records:
-        record["oldForms"] = sorted([old for old, new in old_to_new.items() if new == record["literal"]])
+        old_forms = traditional_forms.get(record["literal"], [])
+        record["oldForms"] = old_forms
+        record["variants"] = [
+            variant
+            for variant in record["variants"]
+            if variant not in old_forms and variant != record["literal"]
+        ]
 
     payload = {
         "source": {
