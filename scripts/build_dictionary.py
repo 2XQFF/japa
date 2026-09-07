@@ -7,8 +7,36 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "kanjidic2.xml.gz"
 JOYO_READINGS_SOURCE = ROOT / "data" / "joyo-readings.json"
+HANJA_SOURCE = ROOT / "data" / "hanja.txt"
+UNIHAN_VARIANTS_SOURCE = ROOT / "data" / "unihan" / "Unihan_Variants.txt"
 TARGET = ROOT / "data" / "kanji.json"
 JOYO_GRADES = set(range(1, 9))
+UNIHAN_MEANING_VARIANT_TYPES = {"kTraditionalVariant", "kSemanticVariant", "kZVariant"}
+KOREAN_FORM_OVERRIDES = {
+    "内": ["內"],
+    "呉": ["吳"],
+    "姫": ["姬"],
+    "娯": ["娛"],
+    "尚": ["尙"],
+    "悦": ["悅"],
+    "惧": ["懼"],
+    "戸": ["戶"],
+    "教": ["敎"],
+    "既": ["旣"],
+    "歳": ["歲"],
+    "没": ["沒"],
+    "清": ["淸"],
+    "税": ["稅"],
+    "脱": ["脫"],
+    "舎": ["舍"],
+    "舗": ["舖"],
+    "説": ["說"],
+    "鋭": ["銳"],
+    "閲": ["閱"],
+    "闘": ["鬪"],
+    "青": ["靑"],
+    "飲": ["飮"],
+}
 
 
 def text(node, default=None):
@@ -44,6 +72,86 @@ def normalize_reading(value):
 
 def format_kun_reading(value):
     return value.replace(".", "-")
+
+
+def split_hanja_info(value):
+    return [
+        item.strip()
+        for item in value.replace(";", ",").split(",")
+        if item.strip()
+    ]
+
+
+def load_hanja_meanings():
+    if not HANJA_SOURCE.exists():
+        raise SystemExit(f"Missing {HANJA_SOURCE}. Download hanja.txt first.")
+
+    meanings = {}
+    for line in HANJA_SOURCE.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(":", 2)
+        if len(parts) != 3:
+            continue
+        _, literal, info = parts
+        literal = literal.strip()
+        if len(literal) != 1 or not is_cjk(literal):
+            continue
+        values = split_hanja_info(info)
+        if values:
+            meanings[literal] = unique(meanings.get(literal, []) + values)
+    return meanings
+
+
+def unihan_char(value):
+    value = value.split("<", 1)[0]
+    if not value.startswith("U+"):
+        return None
+    return chr(int(value[2:], 16))
+
+
+def load_unihan_variants():
+    if not UNIHAN_VARIANTS_SOURCE.exists():
+        return {}
+
+    variants = {}
+    for line in UNIHAN_VARIANTS_SOURCE.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) != 3 or parts[1] not in UNIHAN_MEANING_VARIANT_TYPES:
+            continue
+        literal = unihan_char(parts[0])
+        if not literal:
+            continue
+        values = [
+            char
+            for char in (unihan_char(item) for item in parts[2].split())
+            if char and char != literal and is_cjk(char)
+        ]
+        if values:
+            variants[literal] = unique(variants.get(literal, []) + values)
+    return variants
+
+
+def korean_meanings_for(record, hanja_meanings, unihan_variants):
+    lookup = [
+        record["literal"],
+        *record.get("oldForms", []),
+        *record.get("variants", []),
+        *unihan_variants.get(record["literal"], []),
+    ]
+    meanings = []
+    for literal in lookup:
+        meanings.extend(hanja_meanings.get(literal, []))
+    return unique(meanings)
+
+
+def old_forms_for(literal, traditional_forms):
+    return unique([
+        *traditional_forms.get(literal, []),
+        *KOREAN_FORM_OVERRIDES.get(literal, []),
+    ])
 
 
 def load_joyo_table():
@@ -87,6 +195,8 @@ def main():
         raise SystemExit(f"Missing {SOURCE}. Download kanjidic2.xml.gz first.")
 
     joyo_readings, traditional_forms = load_joyo_table()
+    hanja_meanings = load_hanja_meanings()
+    unihan_variants = load_unihan_variants()
 
     with gzip.open(SOURCE, "rb") as fh:
         root = ET.parse(fh).getroot()
@@ -127,15 +237,9 @@ def main():
 
         ja_on = []
         ja_kun = []
-        meanings = []
         if rmgroup is not None:
             ja_on = all_text(rmgroup, "./reading[@r_type='ja_on']")
             ja_kun = all_text(rmgroup, "./reading[@r_type='ja_kun']")
-            meanings = [
-                node.text.strip()
-                for node in rmgroup.findall("meaning")
-                if node.text and "m_lang" not in node.attrib
-            ]
 
         official_readings = joyo_readings.get(literal, {"on": set(), "kun": set()})
         on_readings = mark_readings(ja_on, official_readings["on"])
@@ -153,7 +257,7 @@ def main():
                 "kun": [item["text"] for item in kun_readings],
                 "onReadings": on_readings,
                 "kunReadings": kun_readings,
-                "meanings": unique(meanings),
+                "meanings": [],
                 "variants": unique(variants),
             }
         )
@@ -163,19 +267,19 @@ def main():
 
     old_to_new = {
         old: new
-        for new, old_forms in traditional_forms.items()
-        if new in joyo_literals
-        for old in old_forms
+        for new in joyo_literals
+        for old in old_forms_for(new, traditional_forms)
     }
 
     for record in joyo_records:
-        old_forms = traditional_forms.get(record["literal"], [])
+        old_forms = old_forms_for(record["literal"], traditional_forms)
         record["oldForms"] = old_forms
         record["variants"] = [
             variant
             for variant in record["variants"]
             if variant not in old_forms and variant != record["literal"]
         ]
+        record["meanings"] = korean_meanings_for(record, hanja_meanings, unihan_variants)
 
     payload = {
         "source": {
@@ -188,6 +292,18 @@ def main():
             "name": "常用漢字表本表.json",
             "url": "https://github.com/mimneko/kanji-data/blob/main/%E5%B8%B8%E7%94%A8%E6%BC%A2%E5%AD%97%E8%A1%A8%E6%9C%AC%E8%A1%A8.json",
             "license": "CC0-1.0",
+        },
+        "hanjaMeaningsSource": {
+            "name": "hanja.txt",
+            "url": "https://github.com/libhangul/libhangul/blob/master/data/hanja/hanja.txt",
+            "license": "BSD-style",
+            "copyright": "Choe Hwanjin",
+        },
+        "unihanVariantsSource": {
+            "name": "Unihan_Variants.txt",
+            "url": "https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip",
+            "license": "Unicode License v3",
+            "optional": True,
         },
         "oldToNew": dict(sorted(old_to_new.items())),
         "records": sorted(joyo_records, key=lambda item: item["literal"]),
