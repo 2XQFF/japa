@@ -19,7 +19,9 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/mimneko/kanji-data/mai
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/libhangul/libhangul/master/data/hanja/hanja.txt" -OutFile "data\hanja.txt"
 Invoke-WebRequest -Uri "https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip" -OutFile "data\Unihan.zip"
 Expand-Archive -LiteralPath "data\Unihan.zip" -DestinationPath "data\unihan" -Force
+Invoke-WebRequest -Uri "https://krdict.korean.go.kr/dicBatchDownload?seq=214" -OutFile "data\krdict-json.zip"
+Expand-Archive -LiteralPath "data\krdict-json.zip" -DestinationPath "data\krdict-json" -Force
 python scripts\build_dictionary.py
 ```
 
-한자 데이터는 EDRDG의 KANJIDIC2를 사용합니다. 상용독음 판별에는 문화청 상용한자표 본표를 바탕으로 정리된 `mimneko/kanji-data`의 `常用漢字表本表.json`을 사용합니다. 한국어 훈음은 libhangul의 `hanja.txt`를 사용하고, 훈음 보조 조회에는 Unicode `Unihan_Variants.txt`를 사용합니다.
+한자 데이터는 EDRDG의 KANJIDIC2를 사용합니다. 상용독음 판별에는 문화청 상용한자표 본표를 바탕으로 정리된 `mimneko/kanji-data`의 `常用漢字表本表.json`을 사용합니다. 한국어 훈음은 libhangul의 `hanja.txt`를 사용하고, 훈음 보조 조회에는 Unicode `Unihan_Variants.txt`와 국립국어원 한국어기초사전 JSON을 사용합니다.

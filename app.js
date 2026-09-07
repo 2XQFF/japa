@@ -32,6 +32,11 @@ function readingItems(record, richKey, plainKey) {
   return record[plainKey].map((text) => ({ text, isJoyo: true }));
 }
 
+function readingLabel(reading) {
+  if (!reading.glosses || !reading.glosses.length) return reading.text;
+  return `${reading.text}(${reading.glosses.join("/")})`;
+}
+
 function buildSearchText(record) {
   return [
     record.literal,
@@ -40,6 +45,7 @@ function buildSearchText(record) {
     ...record.on,
     ...record.kun,
     ...record.meanings,
+    ...readingItems(record, "kunReadings", "kun").flatMap((reading) => reading.glosses || []),
   ]
     .join(" ")
     .toLowerCase();
@@ -122,7 +128,7 @@ function renderReadingList(target, readings) {
     if (index) nodes.push(document.createTextNode(" · "));
     const span = document.createElement("span");
     span.className = reading.isJoyo ? "reading-item" : "reading-item non-joyo";
-    span.textContent = reading.text;
+    span.textContent = readingLabel(reading);
     if (!reading.isJoyo) span.title = "상용표 밖 독음";
     nodes.push(span);
   });

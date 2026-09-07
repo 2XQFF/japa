@@ -1,5 +1,6 @@
 import gzip
 import json
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -9,9 +10,11 @@ SOURCE = ROOT / "data" / "kanjidic2.xml.gz"
 JOYO_READINGS_SOURCE = ROOT / "data" / "joyo-readings.json"
 HANJA_SOURCE = ROOT / "data" / "hanja.txt"
 UNIHAN_VARIANTS_SOURCE = ROOT / "data" / "unihan" / "Unihan_Variants.txt"
+KRDICT_SOURCE_DIR = ROOT / "data" / "krdict-json"
 TARGET = ROOT / "data" / "kanji.json"
 JOYO_GRADES = set(range(1, 9))
 UNIHAN_MEANING_VARIANT_TYPES = {"kTraditionalVariant", "kSemanticVariant", "kZVariant"}
+KRDICT_LEVEL_RANK = {"초급": 0, "중급": 1, "고급": 2}
 KOREAN_FORM_OVERRIDES = {
     "内": ["內"],
     "呉": ["吳"],
@@ -36,6 +39,50 @@ KOREAN_FORM_OVERRIDES = {
     "闘": ["鬪"],
     "青": ["靑"],
     "飲": ["飮"],
+}
+KUN_GLOSS_OVERRIDES = {
+    "下": {
+        "した": ["아래"],
+        "しも": ["아래쪽"],
+        "もと": ["아래"],
+        "さげる": ["내리다"],
+        "さがる": ["내려가다"],
+        "くだる": ["내려가다"],
+        "くだす": ["내리다"],
+        "くださる": ["주시다"],
+        "おろす": ["내리다"],
+        "おりる": ["내리다"],
+    },
+    "生": {
+        "いきる": ["살다"],
+        "いかす": ["살리다"],
+        "いける": ["꽂다"],
+        "うまれる": ["태어나다"],
+        "うむ": ["낳다"],
+        "おう": ["나다"],
+        "はえる": ["나다"],
+        "はやす": ["기르다"],
+        "き": ["날것"],
+        "なま": ["날것"],
+    },
+    "国": {
+        "くに": ["나라"],
+    },
+    "上": {
+        "うえ": ["위"],
+        "うわ": ["위"],
+        "かみ": ["위쪽"],
+        "あげる": ["올리다"],
+        "あがる": ["오르다"],
+        "のぼる": ["오르다"],
+        "のぼせる": ["올리다"],
+        "のぼす": ["올리다"],
+    },
+    "行": {
+        "いく": ["가다"],
+        "ゆく": ["가다"],
+        "おこなう": ["행하다"],
+    },
 }
 
 
@@ -72,6 +119,32 @@ def normalize_reading(value):
 
 def format_kun_reading(value):
     return value.replace(".", "-")
+
+
+def as_list(value):
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+def feature_value(node, key):
+    for feature in as_list(node.get("feat") if isinstance(node, dict) else None):
+        if isinstance(feature, dict) and feature.get("att") == key:
+            return feature.get("val", "")
+    return ""
+
+
+def lemma_value(entry):
+    for lemma in as_list(entry.get("Lemma") if isinstance(entry, dict) else None):
+        if not isinstance(lemma, dict):
+            continue
+        feature = lemma.get("feat")
+        if isinstance(feature, dict) and feature.get("att") == "writtenForm":
+            return feature.get("val", "")
+        for item in as_list(feature):
+            if isinstance(item, dict) and item.get("att") == "writtenForm":
+                return item.get("val", "")
+    return ""
 
 
 def split_hanja_info(value):
@@ -134,6 +207,115 @@ def load_unihan_variants():
     return variants
 
 
+def japanese_terms(value):
+    terms = []
+    for segment in re.split(r"[。;；]", value):
+        segment = segment.strip()
+        if not segment:
+            continue
+        match = re.match(r"(.+?)【(.+?)】", segment)
+        if match:
+            terms.append(match.group(1).strip())
+            terms.extend(
+                part.strip()
+                for part in re.split(r"[・･,，、/／]", match.group(2))
+                if part.strip()
+            )
+        else:
+            terms.append(segment)
+    return unique(terms)
+
+
+def load_krdict_glosses(needed_terms):
+    if not KRDICT_SOURCE_DIR.exists():
+        return {}
+
+    glosses = {}
+    for path in KRDICT_SOURCE_DIR.glob("*.json"):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        entries = data["LexicalResource"]["Lexicon"]["LexicalEntry"]
+        for entry in as_list(entries):
+            korean = lemma_value(entry)
+            if not korean:
+                continue
+            level = feature_value(entry, "vocabularyLevel")
+            pos = feature_value(entry, "partOfSpeech")
+            for sense in as_list(entry.get("Sense") if isinstance(entry, dict) else None):
+                for equivalent in as_list(sense.get("Equivalent") if isinstance(sense, dict) else None):
+                    if feature_value(equivalent, "language") != "일본어":
+                        continue
+                    for term in japanese_terms(feature_value(equivalent, "lemma")):
+                        if term not in needed_terms:
+                            continue
+                        glosses.setdefault(term, []).append(
+                            {
+                                "text": korean,
+                                "level": level,
+                                "partOfSpeech": pos,
+                            }
+                        )
+    return glosses
+
+
+def korean_syllable(value):
+    return bool(re.fullmatch(r"[가-힣]+", value))
+
+
+def short_hanja_meanings(meanings):
+    values = []
+    for meaning in meanings:
+        parts = meaning.split()
+        if len(parts) > 1 and korean_syllable(parts[-1]):
+            values.append(" ".join(parts[:-1]))
+        else:
+            values.append(meaning)
+    return unique(values)
+
+
+def hanja_sounds(meanings):
+    sounds = []
+    for meaning in meanings:
+        parts = meaning.split()
+        if parts and korean_syllable(parts[-1]):
+            sounds.append(parts[-1])
+    return set(sounds)
+
+
+def meaning_roots(meanings):
+    roots = set()
+    for meaning in short_hanja_meanings(meanings):
+        if not meaning:
+            continue
+        roots.add(meaning)
+        if meaning.endswith("울"):
+            roots.add(f"{meaning[:-1]}우")
+    return roots
+
+
+def choose_korean_glosses(candidates, record, limit=1):
+    sounds = hanja_sounds(record.get("meanings", []))
+    roots = meaning_roots(record.get("meanings", []))
+    ranked = []
+    for index, candidate in enumerate(candidates):
+        text_value = candidate["text"].strip()
+        if not text_value or "-" in text_value or " " in text_value or "[" in text_value:
+            continue
+        if text_value in sounds:
+            continue
+        semantic_rank = 0 if any(root in text_value or text_value in root for root in roots) else 1
+        ranked.append(
+            (
+                semantic_rank,
+                KRDICT_LEVEL_RANK.get(candidate.get("level", ""), 3),
+                1 if candidate.get("partOfSpeech", "").startswith("보조") else 0,
+                len(text_value),
+                index,
+                text_value,
+            )
+        )
+    return unique(item[-1] for item in sorted(ranked))[:limit]
+
+
 def korean_meanings_for(record, hanja_meanings, unihan_variants):
     lookup = [
         record["literal"],
@@ -154,6 +336,56 @@ def old_forms_for(literal, traditional_forms):
     ])
 
 
+def display_kun_reading(literal, reading, examples):
+    for example in examples:
+        if literal not in example:
+            continue
+        after = example.split(literal, 1)[1]
+        okurigana = ""
+        for char in after:
+            if "\u3041" <= char <= "\u3096":
+                okurigana += char
+            else:
+                break
+        if okurigana and reading.endswith(okurigana):
+            return f"{reading[:-len(okurigana)]}-{okurigana}"
+    return reading
+
+
+def terms_for_kun(literal, examples):
+    terms = []
+    for example in examples:
+        if literal not in example:
+            continue
+        term = re.split(r"[（(、，,。・･\s]", example, 1)[0]
+        if term:
+            terms.append(term)
+    return unique(terms)
+
+
+def official_kun_readings(literal, kun_details, krdict_glosses, record):
+    readings = []
+    for detail in kun_details.get(literal, []):
+        raw = detail["reading"]
+        override = KUN_GLOSS_OVERRIDES.get(literal, {}).get(raw)
+        terms = terms_for_kun(literal, detail["examples"])
+        glosses = override or unique(
+            gloss
+            for term in terms
+            for gloss in choose_korean_glosses(krdict_glosses.get(term, []), record)
+        )[:1]
+        if not glosses:
+            glosses = short_hanja_meanings(record.get("meanings", []))[:2]
+        readings.append(
+            {
+                "text": display_kun_reading(literal, raw, detail["examples"]),
+                "isJoyo": True,
+                "glosses": glosses,
+            }
+        )
+    return readings
+
+
 def load_joyo_table():
     if not JOYO_READINGS_SOURCE.exists():
         raise SystemExit(f"Missing {JOYO_READINGS_SOURCE}. Download joyo-readings.json first.")
@@ -161,10 +393,12 @@ def load_joyo_table():
     data = json.loads(JOYO_READINGS_SOURCE.read_text(encoding="utf-8"))
     readings = {}
     traditional_forms = {}
+    kun_details = {}
     for item in data:
         literal = item["漢字"]["通用字体"]
         on = set()
         kun = set()
+        details = []
         for reading in item.get("音訓", []):
             value = normalize_reading(reading.get("読み", ""))
             if not value:
@@ -173,13 +407,15 @@ def load_joyo_table():
                 on.add(value)
             else:
                 kun.add(value)
+                details.append({"reading": value, "examples": reading.get("例", [])})
         readings[literal] = {"on": on, "kun": kun}
+        kun_details[literal] = details
         traditional_forms[literal] = unique(
             char
             for char in item["漢字"].get("康熙字典体", "")
             if is_cjk(char) and char != literal
         )
-    return readings, traditional_forms
+    return readings, traditional_forms, kun_details
 
 
 def mark_readings(values, official_values):
@@ -194,9 +430,16 @@ def main():
     if not SOURCE.exists():
         raise SystemExit(f"Missing {SOURCE}. Download kanjidic2.xml.gz first.")
 
-    joyo_readings, traditional_forms = load_joyo_table()
+    joyo_readings, traditional_forms, kun_details = load_joyo_table()
     hanja_meanings = load_hanja_meanings()
     unihan_variants = load_unihan_variants()
+    needed_terms = {
+        term
+        for literal, details in kun_details.items()
+        for detail in details
+        for term in terms_for_kun(literal, detail["examples"])
+    }
+    krdict_glosses = load_krdict_glosses(needed_terms)
 
     with gzip.open(SOURCE, "rb") as fh:
         root = ET.parse(fh).getroot()
@@ -280,6 +523,8 @@ def main():
             if variant not in old_forms and variant != record["literal"]
         ]
         record["meanings"] = korean_meanings_for(record, hanja_meanings, unihan_variants)
+        record["kunReadings"] = official_kun_readings(record["literal"], kun_details, krdict_glosses, record)
+        record["kun"] = [item["text"] for item in record["kunReadings"]]
 
     payload = {
         "source": {
@@ -303,6 +548,12 @@ def main():
             "name": "Unihan_Variants.txt",
             "url": "https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip",
             "license": "Unicode License v3",
+            "optional": True,
+        },
+        "koreanJapaneseGlossSource": {
+            "name": "한국어기초사전 JSON",
+            "url": "https://krdict.korean.go.kr/download/downloadPopup",
+            "provider": "국립국어원",
             "optional": True,
         },
         "oldToNew": dict(sorted(old_to_new.items())),
