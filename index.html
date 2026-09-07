@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>일본어용 한자사전</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="search-panel" aria-labelledby="title">
+        <div>
+          <p class="eyebrow">KANJIDIC2 기반</p>
+          <h1 id="title">일본어용 한자사전</h1>
+        </div>
+        <label class="search-box">
+          <span>검색</span>
+          <input id="query" type="search" autocomplete="off" autofocus placeholder="예: 亞, 亜, ア, あ, ひがし" />
+        </label>
+        <div class="filters" role="group" aria-label="검색 방식">
+          <button class="active" type="button" data-mode="auto">자동</button>
+          <button type="button" data-mode="kanji">한자</button>
+          <button type="button" data-mode="reading">음훈독</button>
+        </div>
+        <p id="status" class="status">데이터를 불러오는 중...</p>
+      </section>
+
+      <section class="results-shell" aria-live="polite">
+        <div id="results" class="results"></div>
+      </section>
+    </main>
+
+    <template id="card-template">
+      <article class="card">
+        <div class="kanji-block">
+          <div class="literal"></div>
+          <div class="meta"></div>
+        </div>
+        <div class="details">
+          <div class="notice hidden"></div>
+          <dl>
+            <div>
+              <dt>음독</dt>
+              <dd class="on"></dd>
+            </div>
+            <div>
+              <dt>훈독</dt>
+              <dd class="kun"></dd>
+            </div>
+            <div>
+              <dt>구자체</dt>
+              <dd class="old"></dd>
+            </div>
+            <div>
+              <dt>이체자</dt>
+              <dd class="variants"></dd>
+            </div>
+            <div>
+              <dt>뜻</dt>
+              <dd class="meanings"></dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+    </template>
+
+    <footer>
+      Data from KANJIDIC2 by the Electronic Dictionary Research and Development Group, CC BY-SA 4.0.
+    </footer>
+    <script src="app.js"></script>
+  </body>
+</html>
