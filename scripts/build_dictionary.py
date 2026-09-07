@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "kanjidic2.xml.gz"
+JOYO_READINGS_SOURCE = ROOT / "data" / "joyo-readings.json"
 TARGET = ROOT / "data" / "kanji.json"
 JOYO_GRADES = set(range(1, 9))
 
@@ -28,9 +29,45 @@ def unique(values):
     return out
 
 
+def normalize_reading(value):
+    return value.replace(".", "").replace("-", "").strip()
+
+
+def load_joyo_readings():
+    if not JOYO_READINGS_SOURCE.exists():
+        raise SystemExit(f"Missing {JOYO_READINGS_SOURCE}. Download joyo-readings.json first.")
+
+    data = json.loads(JOYO_READINGS_SOURCE.read_text(encoding="utf-8"))
+    readings = {}
+    for item in data:
+        literal = item["漢字"]["通用字体"]
+        on = set()
+        kun = set()
+        for reading in item.get("音訓", []):
+            value = normalize_reading(reading.get("読み", ""))
+            if not value:
+                continue
+            if "\u30a0" <= value[0] <= "\u30ff":
+                on.add(value)
+            else:
+                kun.add(value)
+        readings[literal] = {"on": on, "kun": kun}
+    return readings
+
+
+def mark_readings(values, official_values):
+    official = {normalize_reading(value) for value in official_values}
+    return [
+        {"text": value, "isJoyo": normalize_reading(value) in official}
+        for value in unique(values)
+    ]
+
+
 def main():
     if not SOURCE.exists():
         raise SystemExit(f"Missing {SOURCE}. Download kanjidic2.xml.gz first.")
+
+    joyo_readings = load_joyo_readings()
 
     with gzip.open(SOURCE, "rb") as fh:
         root = ET.parse(fh).getroot()
@@ -83,6 +120,10 @@ def main():
                 if node.text and "m_lang" not in node.attrib
             ]
 
+        official_readings = joyo_readings.get(literal, {"on": set(), "kun": set()})
+        on_readings = mark_readings(ja_on, official_readings["on"])
+        kun_readings = mark_readings(ja_kun, official_readings["kun"])
+
         records.append(
             {
                 "literal": literal,
@@ -91,8 +132,10 @@ def main():
                 "grade": int(text(misc.find("grade"), "0")) if misc is not None and misc.find("grade") is not None else None,
                 "jlpt": int(text(misc.find("jlpt"), "0")) if misc is not None and misc.find("jlpt") is not None else None,
                 "frequency": int(text(misc.find("freq"), "0")) if misc is not None and misc.find("freq") is not None else None,
-                "on": unique(ja_on),
-                "kun": unique(ja_kun),
+                "on": [item["text"] for item in on_readings],
+                "kun": [item["text"] for item in kun_readings],
+                "onReadings": on_readings,
+                "kunReadings": kun_readings,
                 "meanings": unique(meanings),
                 "variants": unique(variants),
             }
@@ -113,14 +156,22 @@ def main():
             score -= 100
         return score
 
-    old_to_new = {}
-    for left, right in variant_pairs:
+    old_to_new_candidates = {}
+    for left, right in sorted(variant_pairs):
         left_record = by_literal[left]
         right_record = by_literal[right]
         if modern_score(left_record) == modern_score(right_record):
             continue
         old, new = (right, left) if modern_score(left_record) > modern_score(right_record) else (left, right)
-        old_to_new[old] = new
+        old_to_new_candidates.setdefault(old, set()).add(new)
+
+    old_to_new = {
+        old: sorted(
+            candidates,
+            key=lambda literal: (-modern_score(by_literal[literal]), literal),
+        )[0]
+        for old, candidates in old_to_new_candidates.items()
+    }
 
     joyo_records = [record for record in records if record.get("grade") in JOYO_GRADES]
     joyo_literals = {record["literal"] for record in joyo_records}
@@ -136,6 +187,11 @@ def main():
             "url": "https://www.edrdg.org/kanjidic/kanjidic2.xml.gz",
             "license": "Creative Commons Attribution-ShareAlike 4.0",
             "copyright": "Electronic Dictionary Research and Development Group",
+        },
+        "joyoReadingsSource": {
+            "name": "常用漢字表本表.json",
+            "url": "https://github.com/mimneko/kanji-data/blob/main/%E5%B8%B8%E7%94%A8%E6%BC%A2%E5%AD%97%E8%A1%A8%E6%9C%AC%E8%A1%A8.json",
+            "license": "CC0-1.0",
         },
         "oldToNew": dict(sorted(old_to_new.items())),
         "records": sorted(joyo_records, key=lambda item: item["literal"]),

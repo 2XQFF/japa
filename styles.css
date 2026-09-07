@@ -192,6 +192,12 @@ dd {
   overflow-wrap: anywhere;
 }
 
+.reading-item.non-joyo {
+  display: inline-block;
+  color: #a23b2a;
+  font-weight: 800;
+}
+
 footer {
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto 18px;

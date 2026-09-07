@@ -27,6 +27,11 @@ function labelList(values, empty = "자료 없음") {
   return values && values.length ? values.join(" · ") : empty;
 }
 
+function readingItems(record, richKey, plainKey) {
+  if (record[richKey]) return record[richKey];
+  return record[plainKey].map((text) => ({ text, isJoyo: true }));
+}
+
 function buildSearchText(record) {
   return [
     record.literal,
@@ -98,12 +103,30 @@ function renderCard(hit) {
     notice.classList.remove("hidden");
   }
 
-  node.querySelector(".on").textContent = labelList(record.on);
-  node.querySelector(".kun").textContent = labelList(record.kun);
+  renderReadingList(node.querySelector(".on"), readingItems(record, "onReadings", "on"));
+  renderReadingList(node.querySelector(".kun"), readingItems(record, "kunReadings", "kun"));
   node.querySelector(".old").textContent = labelList(record.oldForms);
   node.querySelector(".variants").textContent = labelList(record.variants);
   node.querySelector(".meanings").textContent = labelList(record.meanings);
   return node;
+}
+
+function renderReadingList(target, readings) {
+  if (!readings.length) {
+    target.textContent = "자료 없음";
+    return;
+  }
+
+  const nodes = [];
+  readings.forEach((reading, index) => {
+    if (index) nodes.push(document.createTextNode(" · "));
+    const span = document.createElement("span");
+    span.className = reading.isJoyo ? "reading-item" : "reading-item non-joyo";
+    span.textContent = reading.text;
+    if (!reading.isJoyo) span.title = "상용표 밖 독음";
+    nodes.push(span);
+  });
+  target.replaceChildren(...nodes);
 }
 
 function render() {
