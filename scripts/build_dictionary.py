@@ -42,6 +42,10 @@ def normalize_reading(value):
     return value.replace(".", "").replace("-", "").strip()
 
 
+def format_kun_reading(value):
+    return value.replace(".", "-")
+
+
 def load_joyo_table():
     if not JOYO_READINGS_SOURCE.exists():
         raise SystemExit(f"Missing {JOYO_READINGS_SOURCE}. Download joyo-readings.json first.")
@@ -135,7 +139,7 @@ def main():
 
         official_readings = joyo_readings.get(literal, {"on": set(), "kun": set()})
         on_readings = mark_readings(ja_on, official_readings["on"])
-        kun_readings = mark_readings(ja_kun, official_readings["kun"])
+        kun_readings = mark_readings([format_kun_reading(value) for value in ja_kun], official_readings["kun"])
 
         records.append(
             {
