@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data" / "kanjidic2.xml.gz"
 TARGET = ROOT / "data" / "kanji.json"
+JOYO_GRADES = set(range(1, 9))
 
 
 def text(node, default=None):
@@ -121,7 +122,12 @@ def main():
         old, new = (right, left) if modern_score(left_record) > modern_score(right_record) else (left, right)
         old_to_new[old] = new
 
-    for record in records:
+    joyo_records = [record for record in records if record.get("grade") in JOYO_GRADES]
+    joyo_literals = {record["literal"] for record in joyo_records}
+
+    old_to_new = {old: new for old, new in old_to_new.items() if new in joyo_literals}
+
+    for record in joyo_records:
         record["oldForms"] = sorted([old for old, new in old_to_new.items() if new == record["literal"]])
 
     payload = {
@@ -132,11 +138,11 @@ def main():
             "copyright": "Electronic Dictionary Research and Development Group",
         },
         "oldToNew": dict(sorted(old_to_new.items())),
-        "records": sorted(records, key=lambda item: item["literal"]),
+        "records": sorted(joyo_records, key=lambda item: item["literal"]),
     }
 
     TARGET.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"Wrote {TARGET} with {len(records)} kanji and {len(old_to_new)} old-form mappings.")
+    print(f"Wrote {TARGET} with {len(joyo_records)} joyo kanji and {len(old_to_new)} old-form mappings.")
 
 
 if __name__ == "__main__":
