@@ -13,6 +13,10 @@
           <p class="eyebrow">KANJIDIC2 기반</p>
           <h1 id="title">일본어용 한자사전</h1>
         </div>
+        <nav class="dictionary-tabs" aria-label="사전 선택">
+          <button class="active" type="button" data-dictionary="kanji">한자</button>
+          <button type="button" data-dictionary="jukujikun">숙자훈</button>
+        </nav>
         <label class="search-box">
           <span>검색</span>
           <input id="query" type="search" autocomplete="off" autofocus placeholder="예: 亞, 亜, ア, あ, ひがし" />
@@ -64,8 +68,35 @@
       </article>
     </template>
 
+    <template id="jukujikun-template">
+      <article class="word-card">
+        <div class="word-main">
+          <div class="writing"></div>
+          <div class="reading"></div>
+        </div>
+        <dl class="word-details">
+          <div>
+            <dt>뜻</dt>
+            <dd class="word-meanings"></dd>
+          </div>
+          <div>
+            <dt>다른 읽기</dt>
+            <dd class="word-readings"></dd>
+          </div>
+          <div>
+            <dt>표기 정보</dt>
+            <dd class="word-info"></dd>
+          </div>
+          <div>
+            <dt>우선순위</dt>
+            <dd class="word-priority"></dd>
+          </div>
+        </dl>
+      </article>
+    </template>
+
     <footer>
-      Data from KANJIDIC2 by the Electronic Dictionary Research and Development Group, CC BY-SA 4.0.
+      Data from KANJIDIC2 and JMdict by the Electronic Dictionary Research and Development Group, CC BY-SA 4.0.
     </footer>
     <script src="app.js"></script>
   </body>
