@@ -9,7 +9,7 @@ SOURCE_DIR = ROOT / "data" / "krdict-json"
 TARGET_DIR = ROOT / "data" / "words"
 META_TARGET = TARGET_DIR / "meta.json"
 OLD_TARGET = ROOT / "data" / "words.json"
-MAX_MEANINGS = 3
+MAX_MEANINGS = 1
 EMPTY_MARKERS = {"", "없음"}
 COMMON_LEVELS = {"초급", "중급"}
 LEVEL_RANKS = {"초급": 0, "중급": 1, "고급": 2}
@@ -30,6 +30,61 @@ PART_RANKS = {
     "조사": 12,
     "어미": 13,
     "품사 없음": 99,
+}
+CANONICAL_MEANINGS = {
+    "する": ["하다"],
+    "為る:する": ["하다"],
+    "なる": ["되다"],
+    "成る": ["되다"],
+    "できる": ["되다"],
+    "出来る": ["되다"],
+    "ある": ["있다"],
+    "有る": ["있다"],
+    "いる": ["있다"],
+    "居る": ["있다"],
+    "ない": ["없다"],
+    "無い": ["없다"],
+    "いい": ["좋다"],
+    "良い": ["좋다"],
+    "上がる": ["오르다"],
+    "上げる": ["올리다"],
+    "上る": ["오르다"],
+    "下がる": ["내려가다"],
+    "下げる": ["내리다"],
+    "下る": ["내려가다"],
+    "下ろす": ["내리다"],
+    "入る": ["들어가다"],
+    "入れる": ["넣다"],
+    "出る": ["나오다"],
+    "出す": ["내다"],
+    "行く": ["가다"],
+    "いく": ["가다"],
+    "来る": ["오다"],
+    "くる": ["오다"],
+    "見る": ["보다"],
+    "みる": ["보다"],
+    "聞く": ["듣다"],
+    "読む": ["읽다"],
+    "書く": ["쓰다"],
+    "食べる": ["먹다"],
+    "飲む": ["마시다"],
+    "寝る": ["자다"],
+    "起きる": ["일어나다"],
+    "買う": ["사다"],
+    "売る": ["팔다"],
+    "待つ": ["기다리다"],
+    "使う": ["쓰다"],
+    "作る": ["만들다"],
+    "取る": ["잡다"],
+    "持つ": ["가지다"],
+    "思う": ["생각하다"],
+    "言う": ["말하다"],
+    "いう": ["말하다"],
+    "分かる": ["알다"],
+    "わかる": ["알다"],
+    "知る": ["알다"],
+    "話す": ["말하다"],
+    "鳴る": ["울다"],
 }
 INVALID_WORD_PATTERN = re.compile(r"[#…()[\]{}<>「」『』【】（）]")
 ALLOWED_TERM_PATTERN = re.compile(r"^[A-Za-z0-9\u3040-\u30ff\u3400-\u9fff\uff10-\uff5a々〆ヶー・･]+$")
@@ -169,6 +224,26 @@ def clean_levels(values):
     return sorted(clean_meta(values), key=lambda value: (level_rank(value), value))
 
 
+def primary_reading(value):
+    return re.split(r"[・･]", value, 1)[0] if value else ""
+
+
+def canonical_meanings(record):
+    term = record["term"]
+    reading = primary_reading(record["reading"])
+    keys = [
+        f"{term}:{reading}" if reading else "",
+        term,
+        clean_search_value(term),
+    ]
+    existing = set(record["meanings"])
+    for key in keys:
+        values = CANONICAL_MEANINGS.get(key)
+        if values:
+            return [value for value in values if value in existing] or values
+    return []
+
+
 def compact_record(record):
     return [
         record["term"],
@@ -273,7 +348,8 @@ def main():
 
     records = []
     for record in records_by_key.values():
-        record["meanings"] = sorted(unique(record["meanings"]), key=lambda meaning: meaning_sort_key(record, meaning))[:MAX_MEANINGS]
+        canonical = canonical_meanings(record)
+        record["meanings"] = canonical or sorted(unique(record["meanings"]), key=lambda meaning: meaning_sort_key(record, meaning))[:MAX_MEANINGS]
         record["partsOfSpeech"] = clean_parts(record["partsOfSpeech"])
         record["levels"] = clean_levels(record["levels"])
         if is_usable_record(record):

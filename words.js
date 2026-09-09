@@ -8,6 +8,17 @@ const LEVEL_RANKS = new Map([
   ["중급", 1],
   ["고급", 2],
 ]);
+const KOREAN_QUERY_WORD_RANKS = new Map([
+  ["되다", new Map([["なる", 0], ["出来る", 1], ["できる", 1], ["成る", 2]])],
+  ["하다", new Map([["する", 0], ["為る", 1]])],
+  ["있다", new Map([["ある", 0], ["有る", 1], ["いる", 2], ["居る", 3]])],
+  ["없다", new Map([["ない", 0], ["無い", 1]])],
+  ["가다", new Map([["行く", 0], ["いく", 0], ["ゆく", 1], ["逝く", 2]])],
+  ["오다", new Map([["来る", 0], ["くる", 0]])],
+  ["보다", new Map([["見る", 0], ["みる", 0]])],
+  ["말하다", new Map([["言う", 0], ["いう", 0], ["話す", 1], ["はなす", 1]])],
+  ["알다", new Map([["分かる", 0], ["わかる", 0], ["知る", 1], ["しる", 1]])],
+]);
 
 const state = {
   count: null,
@@ -72,6 +83,10 @@ function wordSortValue(record) {
   return cleanWord(wordReading(record) || wordTerm(record));
 }
 
+function isKoreanQuery(value) {
+  return /[가-힣]/.test(value);
+}
+
 function labelList(values, empty = "자료 없음") {
   return values && values.length ? values.join(" · ") : empty;
 }
@@ -116,6 +131,32 @@ function meaningBreadth(record, score) {
   return score >= 6 ? wordMeanings(record).length : 0;
 }
 
+function preferredMeaningRank(record, query) {
+  if (!isKoreanQuery(query)) return 99;
+  const ranks = KOREAN_QUERY_WORD_RANKS.get(query);
+  if (!ranks) return 99;
+  const term = wordTerm(record);
+  return Math.min(ranks.get(term) ?? 99, ranks.get(cleanWord(term)) ?? 99);
+}
+
+function displayMeanings(record, rawQuery) {
+  const query = rawQuery.trim().toLowerCase();
+  const meanings = wordMeanings(record);
+  if (!isKoreanQuery(query)) return meanings;
+
+  return meanings
+    .map((meaning, index) => {
+      const value = meaning.toLowerCase();
+      let rank = 3;
+      if (value === query) rank = 0;
+      else if (value.startsWith(query)) rank = 1;
+      else if (value.includes(query)) rank = 2;
+      return { meaning, index, rank };
+    })
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((item) => item.meaning);
+}
+
 function findMatches(rawQuery, records) {
   const query = rawQuery.trim().toLowerCase();
   if (!query) return [];
@@ -126,6 +167,7 @@ function findMatches(rawQuery, records) {
     .filter((hit) => hit.score !== null)
     .sort((a, b) =>
       a.score - b.score ||
+      preferredMeaningRank(a.record, query) - preferredMeaningRank(b.record, query) ||
       meaningMatchRank(a.record, query) - meaningMatchRank(b.record, query) ||
       meaningBreadth(a.record, a.score) - meaningBreadth(b.record, b.score) ||
       wordLevelRank(a.record) - wordLevelRank(b.record) ||
@@ -180,7 +222,7 @@ function createRubyForTerm(term, reading) {
   return fragment;
 }
 
-function renderCard(hit) {
+function renderCard(hit, query) {
   const node = els.template.content.firstElementChild.cloneNode(true);
   const { record } = hit;
   const term = wordTerm(record);
@@ -195,7 +237,7 @@ function renderCard(hit) {
     readingNode.classList.add("hidden");
   }
 
-  node.querySelector(".word-meanings").textContent = labelList(wordMeanings(record));
+  node.querySelector(".word-meanings").textContent = labelList(displayMeanings(record, query));
   node.querySelector(".word-pos").textContent = labelList(wordParts(record));
   node.querySelector(".word-levels").textContent = labelList(wordLevels(record));
   return node;
@@ -232,7 +274,7 @@ function render() {
   }
 
   const hits = findMatches(query, state.buckets.get(filename));
-  els.results.replaceChildren(...hits.map(renderCard));
+  els.results.replaceChildren(...hits.map((hit) => renderCard(hit, query)));
   if (hits.length) {
     els.status.textContent = `${hits.length.toLocaleString()}개 결과`;
   } else {
