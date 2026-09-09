@@ -11,6 +11,11 @@ META_TARGET = TARGET_DIR / "meta.json"
 OLD_TARGET = ROOT / "data" / "words.json"
 MAX_MEANINGS = 8
 EMPTY_MARKERS = {"", "없음"}
+COMMON_LEVELS = {"초급", "중급"}
+GRAMMAR_ONLY_PARTS = {"어미", "조사", "접사", "의존 명사", "보조 동사", "보조 형용사", "품사 없음"}
+INVALID_WORD_PATTERN = re.compile(r"[#…()[\]{}<>「」『』【】（）]")
+ALLOWED_TERM_PATTERN = re.compile(r"^[A-Za-z0-9\u3040-\u30ff\u3400-\u9fff\uff10-\uff5a々〆ヶー・･]+$")
+PHRASE_MARKER_PATTERN = re.compile(r"(を|にも|では|とは|から|まで|より|している|してある|になる|にする|が良い|が悪い|がある|がない)")
 
 
 def as_list(value):
@@ -123,6 +128,46 @@ def compact_record(record):
     ]
 
 
+def has_common_level(record):
+    return any(level in COMMON_LEVELS for level in record["levels"])
+
+
+def has_usable_level(record):
+    return has_common_level(record) or (
+        not record["levels"]
+        and bool(record["reading"])
+        and len(record["term"]) <= 12
+    )
+
+
+def has_dictionary_part(record):
+    return any(part not in GRAMMAR_ONLY_PARTS for part in record["partsOfSpeech"])
+
+
+def is_single_han_term(term):
+    return bool(re.fullmatch(r"[\u3400-\u9fff]", term))
+
+
+def is_clean_word_form(value):
+    if not value or len(value) > 24:
+        return False
+    if INVALID_WORD_PATTERN.search(value) or re.search(r"\s", value):
+        return False
+    if PHRASE_MARKER_PATTERN.search(value):
+        return False
+    return bool(ALLOWED_TERM_PATTERN.fullmatch(value))
+
+
+def is_usable_record(record):
+    return (
+        has_usable_level(record)
+        and has_dictionary_part(record)
+        and is_clean_word_form(record["term"])
+        and (not record["reading"] or is_clean_word_form(record["reading"]))
+        and not is_single_han_term(record["term"])
+    )
+
+
 def bucket_keys(record):
     return unique(
         [
@@ -177,7 +222,8 @@ def main():
         record["meanings"] = unique(record["meanings"])[:MAX_MEANINGS]
         record["partsOfSpeech"] = clean_meta(record["partsOfSpeech"])
         record["levels"] = clean_meta(record["levels"])
-        records.append(record)
+        if is_usable_record(record):
+            records.append(record)
 
     TARGET_DIR.mkdir(parents=True, exist_ok=True)
     for path in TARGET_DIR.glob("*.json"):
