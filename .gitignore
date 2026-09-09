@@ -1,0 +1,6 @@
+scripts/__pycache__/
+data/krdict-json/
+data/krdict-json.zip
+data/Unihan.zip
+data/package/
+data/seyoungsong-hanjadict-*.tgz

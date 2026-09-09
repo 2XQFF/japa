@@ -30,7 +30,7 @@ body {
 
 .search-panel {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(260px, 1.6fr) auto;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(260px, 1.6fr) auto;
   gap: 18px;
   align-items: end;
   padding: 24px 0 22px;
@@ -75,15 +75,24 @@ input:focus {
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
 }
 
+.dictionary-tabs,
 .filters {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
   background: var(--panel);
 }
 
+.dictionary-tabs {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.filters {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.dictionary-tabs button,
 .filters button {
   min-width: 76px;
   min-height: 48px;
@@ -95,10 +104,12 @@ input:focus {
   cursor: pointer;
 }
 
+.dictionary-tabs button:first-child,
 .filters button:first-child {
   border-left: 0;
 }
 
+.dictionary-tabs button.active,
 .filters button.active {
   background: var(--accent);
   color: white;
@@ -132,6 +143,10 @@ input:focus {
   background: var(--panel);
 }
 
+.word-card {
+  grid-template-columns: minmax(220px, 0.85fr) 1.15fr;
+}
+
 .kanji-block {
   display: grid;
   align-content: center;
@@ -145,6 +160,31 @@ input:focus {
   font-family: "Yu Mincho", "MS Mincho", serif;
   font-size: 86px;
   line-height: 1;
+}
+
+.word-block {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: var(--warm);
+  padding: 16px;
+  min-width: 0;
+}
+
+.word-term {
+  font-size: 34px;
+  line-height: 1.2;
+  font-weight: 800;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.word-reading {
+  color: var(--muted);
+  font-size: 18px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .meta {

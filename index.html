@@ -3,21 +3,25 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>일본어용 한자사전</title>
+    <title>일본어 사전</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="app">
       <section class="search-panel" aria-labelledby="title">
         <div>
-          <p class="eyebrow">KANJIDIC2 기반</p>
-          <h1 id="title">일본어용 한자사전</h1>
+          <p class="eyebrow">오프라인 데이터</p>
+          <h1 id="title">일본어 사전</h1>
+        </div>
+        <div class="dictionary-tabs" role="tablist" aria-label="사전 선택">
+          <button class="active" type="button" data-dictionary="kanji">한자</button>
+          <button type="button" data-dictionary="words">단어</button>
         </div>
         <label class="search-box">
           <span>검색</span>
           <input id="query" type="search" autocomplete="off" autofocus placeholder="예: 亞, 亜, ア, あ, ひがし" />
         </label>
-        <div class="filters" role="group" aria-label="검색 방식">
+        <div class="filters" role="group" aria-label="한자 검색 방식">
           <button class="active" type="button" data-mode="auto">자동</button>
           <button type="button" data-mode="kanji">한자</button>
           <button type="button" data-mode="reading">음훈독</button>
@@ -64,8 +68,33 @@
       </article>
     </template>
 
+    <template id="word-card-template">
+      <article class="card word-card">
+        <div class="word-block">
+          <div class="word-term"></div>
+          <div class="word-reading"></div>
+        </div>
+        <div class="details">
+          <dl>
+            <div>
+              <dt>뜻</dt>
+              <dd class="word-meanings"></dd>
+            </div>
+            <div>
+              <dt>품사</dt>
+              <dd class="word-pos"></dd>
+            </div>
+            <div>
+              <dt>등급</dt>
+              <dd class="word-levels"></dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+    </template>
+
     <footer>
-      Data from KANJIDIC2 by the Electronic Dictionary Research and Development Group, CC BY-SA 4.0.
+      Data from KANJIDIC2, libhangul, Unicode Unihan, and the National Institute of Korean Language.
     </footer>
     <script src="app.js"></script>
   </body>
