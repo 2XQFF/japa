@@ -3,20 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>일본어 사전</title>
+    <title>일본어용 한자사전</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="app">
       <section class="search-panel" aria-labelledby="title">
         <div>
-          <p class="eyebrow">오프라인 데이터</p>
-          <h1 id="title">일본어 사전</h1>
+          <p class="eyebrow">상용한자</p>
+          <h1 id="title">일본어용 한자사전</h1>
         </div>
-        <div class="dictionary-tabs" role="tablist" aria-label="사전 선택">
-          <button class="active" type="button" data-dictionary="kanji">한자</button>
-          <button type="button" data-dictionary="words">단어</button>
-        </div>
+        <nav class="dictionary-tabs" aria-label="사전 선택">
+          <a class="active" href="./">한자</a>
+          <a href="words.html">단어</a>
+        </nav>
         <label class="search-box">
           <span>검색</span>
           <input id="query" type="search" autocomplete="off" autofocus placeholder="예: 亞, 亜, ア, あ, ひがし" />
@@ -62,31 +62,6 @@
             <div>
               <dt>뜻</dt>
               <dd class="meanings"></dd>
-            </div>
-          </dl>
-        </div>
-      </article>
-    </template>
-
-    <template id="word-card-template">
-      <article class="card word-card">
-        <div class="word-block">
-          <div class="word-term"></div>
-          <div class="word-reading"></div>
-        </div>
-        <div class="details">
-          <dl>
-            <div>
-              <dt>뜻</dt>
-              <dd class="word-meanings"></dd>
-            </div>
-            <div>
-              <dt>품사</dt>
-              <dd class="word-pos"></dd>
-            </div>
-            <div>
-              <dt>등급</dt>
-              <dd class="word-levels"></dd>
             </div>
           </dl>
         </div>

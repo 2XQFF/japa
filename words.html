@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>일본어 단어사전</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="search-panel word-search-panel" aria-labelledby="title">
+        <div>
+          <p class="eyebrow">오프라인 단어</p>
+          <h1 id="title">일본어 단어사전</h1>
+        </div>
+        <nav class="dictionary-tabs" aria-label="사전 선택">
+          <a href="./">한자</a>
+          <a class="active" href="words.html">단어</a>
+        </nav>
+        <label class="search-box">
+          <span>검색</span>
+          <input id="query" type="search" autocomplete="off" autofocus placeholder="예: 学校, がっこう, 배우다, 日本語" />
+        </label>
+        <p id="status" class="status">데이터를 불러오는 중...</p>
+      </section>
+
+      <section class="results-shell" aria-live="polite">
+        <div id="results" class="results"></div>
+      </section>
+    </main>
+
+    <template id="word-card-template">
+      <article class="card word-card">
+        <div class="word-block">
+          <div class="word-term"></div>
+          <div class="word-reading"></div>
+        </div>
+        <div class="details">
+          <dl>
+            <div>
+              <dt>뜻</dt>
+              <dd class="word-meanings"></dd>
+            </div>
+            <div>
+              <dt>품사</dt>
+              <dd class="word-pos"></dd>
+            </div>
+            <div>
+              <dt>등급</dt>
+              <dd class="word-levels"></dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+    </template>
+
+    <footer>
+      Data from the National Institute of Korean Language.
+    </footer>
+    <script src="words.js"></script>
+  </body>
+</html>

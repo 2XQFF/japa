@@ -92,8 +92,10 @@ input:focus {
   grid-template-columns: repeat(3, 1fr);
 }
 
-.dictionary-tabs button,
+.dictionary-tabs a,
 .filters button {
+  display: grid;
+  place-items: center;
   min-width: 76px;
   min-height: 48px;
   border: 0;
@@ -101,19 +103,24 @@ input:focus {
   background: transparent;
   color: var(--muted);
   font: inherit;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.dictionary-tabs button:first-child,
+.dictionary-tabs a:first-child,
 .filters button:first-child {
   border-left: 0;
 }
 
-.dictionary-tabs button.active,
+.dictionary-tabs a.active,
 .filters button.active {
   background: var(--accent);
   color: white;
   font-weight: 700;
+}
+
+.word-search-panel {
+  grid-template-columns: minmax(180px, 1fr) auto minmax(260px, 1.6fr);
 }
 
 .status {
