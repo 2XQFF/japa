@@ -5,7 +5,9 @@ const WORD_PARTS = 3;
 const WORD_LEVELS = 4;
 
 const state = {
-  words: [],
+  count: null,
+  buckets: new Map(),
+  bucketStatus: new Map(),
 };
 
 const els = {
@@ -27,6 +29,14 @@ function cleanReading(value) {
 
 function cleanWord(value) {
   return cleanReading(value.toLowerCase().replace(/[・･,，、/／]/g, ""));
+}
+
+function bucketKey(value) {
+  return Array.from(cleanWord(value))[0] || "";
+}
+
+function bucketFilename(key) {
+  return key ? `u${key.codePointAt(0).toString(16)}.json` : "";
 }
 
 function wordTerm(record) {
@@ -78,12 +88,12 @@ function wordScore(record, query, foldedQuery) {
   return null;
 }
 
-function findMatches(rawQuery) {
+function findMatches(rawQuery, records) {
   const query = rawQuery.trim().toLowerCase();
   if (!query) return [];
 
   const foldedQuery = cleanWord(query);
-  return state.words
+  return records
     .map((record) => ({ record, score: wordScore(record, query, foldedQuery) }))
     .filter((hit) => hit.score !== null)
     .sort((a, b) => a.score - b.score || wordTerm(a.record).length - wordTerm(b.record).length || wordTerm(a.record).localeCompare(wordTerm(b.record), "ja"))
@@ -156,21 +166,73 @@ function renderCard(hit) {
 }
 
 function render() {
-  const hits = findMatches(els.query.value);
+  const query = els.query.value.trim();
+  if (!query) {
+    els.results.replaceChildren();
+    const count = state.count ? `${state.count.toLocaleString()}개 단어 수록. ` : "";
+    els.status.textContent = `${count}일본어 단어나 한국어 뜻을 입력해 보세요.`;
+    return;
+  }
+
+  const key = bucketKey(query);
+  const filename = bucketFilename(key);
+  if (!filename) {
+    els.results.replaceChildren();
+    els.status.textContent = "검색 결과가 없습니다.";
+    return;
+  }
+
+  if (state.bucketStatus.get(filename) === "error") {
+    els.results.replaceChildren();
+    els.status.textContent = "검색 데이터를 불러오지 못했습니다.";
+    return;
+  }
+
+  if (!state.buckets.has(filename)) {
+    loadBucket(filename);
+    els.results.replaceChildren();
+    els.status.textContent = "검색 데이터를 불러오는 중...";
+    return;
+  }
+
+  const hits = findMatches(query, state.buckets.get(filename));
   els.results.replaceChildren(...hits.map(renderCard));
-  if (!els.query.value.trim()) {
-    els.status.textContent = `${state.words.length.toLocaleString()}개 단어 수록. 일본어 단어나 한국어 뜻을 입력해 보세요.`;
-  } else if (hits.length) {
+  if (hits.length) {
     els.status.textContent = `${hits.length.toLocaleString()}개 결과`;
   } else {
     els.status.textContent = "검색 결과가 없습니다.";
   }
 }
 
+async function loadBucket(filename) {
+  if (state.bucketStatus.get(filename) === "loading") return;
+  state.bucketStatus.set(filename, "loading");
+  try {
+    const response = await fetch(`data/words/${filename}`);
+    if (!response.ok) {
+      state.buckets.set(filename, []);
+      state.bucketStatus.set(filename, "ready");
+      render();
+      return;
+    }
+    const records = await response.json();
+    state.buckets.set(filename, records);
+    state.bucketStatus.set(filename, "ready");
+  } catch (error) {
+    state.bucketStatus.set(filename, "error");
+    console.error(error);
+  }
+  render();
+}
+
 async function init() {
-  const response = await fetch("data/words.json");
-  const payload = await response.json();
-  state.words = payload.records;
+  try {
+    const response = await fetch("data/words/meta.json");
+    const payload = await response.json();
+    state.count = payload.count;
+  } catch (error) {
+    console.warn(error);
+  }
   render();
 }
 

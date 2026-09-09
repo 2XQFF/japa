@@ -6,7 +6,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "data" / "krdict-json"
-TARGET = ROOT / "data" / "words.json"
+TARGET_DIR = ROOT / "data" / "words"
+META_TARGET = TARGET_DIR / "meta.json"
+OLD_TARGET = ROOT / "data" / "words.json"
 MAX_MEANINGS = 8
 EMPTY_MARKERS = {"", "없음"}
 
@@ -51,6 +53,27 @@ def clean_term(value):
     value = html.unescape(value).strip()
     value = re.sub(r"\s+", " ", value)
     return value.strip(" \t\r\n。;；")
+
+
+def kana_fold(value):
+    return "".join(
+        chr(ord(char) + 0x60) if "\u3041" <= char <= "\u3096" else char
+        for char in value
+    )
+
+
+def clean_search_value(value):
+    value = kana_fold(value.lower())
+    return re.sub(r"[.\-\s・･,，、/／]", "", value)
+
+
+def bucket_key(value):
+    value = clean_search_value(value)
+    return value[0] if value else ""
+
+
+def bucket_filename(key):
+    return f"u{ord(key):x}.json" if key else "empty.json"
 
 
 def split_written_forms(value):
@@ -100,6 +123,16 @@ def compact_record(record):
     ]
 
 
+def bucket_keys(record):
+    return unique(
+        [
+            bucket_key(record["term"]),
+            bucket_key(record["reading"]),
+            *(bucket_key(meaning) for meaning in record["meanings"]),
+        ]
+    )
+
+
 def main():
     if not SOURCE_DIR.exists():
         raise SystemExit(f"Missing {SOURCE_DIR}. Download and extract krdict-json first.")
@@ -146,6 +179,26 @@ def main():
         record["levels"] = clean_meta(record["levels"])
         records.append(record)
 
+    TARGET_DIR.mkdir(parents=True, exist_ok=True)
+    for path in TARGET_DIR.glob("*.json"):
+        path.unlink()
+    if OLD_TARGET.exists():
+        OLD_TARGET.unlink()
+
+    buckets = {}
+    for record in sorted(records, key=reading_sort_key):
+        compact = compact_record(record)
+        for key in bucket_keys(record):
+            if key:
+                buckets.setdefault(key, []).append(compact)
+
+    for key, bucket_records in sorted(buckets.items()):
+        filename = bucket_filename(key)
+        (TARGET_DIR / filename).write_text(
+            json.dumps(bucket_records, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+
     payload = {
         "source": {
             "name": "한국어기초사전 JSON",
@@ -153,10 +206,10 @@ def main():
             "provider": "국립국어원",
         },
         "schema": ["term", "reading", "meanings", "partsOfSpeech", "levels"],
-        "records": [compact_record(record) for record in sorted(records, key=reading_sort_key)],
+        "count": len(records),
     }
-    TARGET.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"Wrote {TARGET} with {len(records)} Japanese word entries.")
+    META_TARGET.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"Wrote {TARGET_DIR} with {len(records)} Japanese word entries in {len(buckets)} buckets.")
 
 
 if __name__ == "__main__":
