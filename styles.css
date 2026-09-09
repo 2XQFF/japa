@@ -174,10 +174,21 @@ input:focus {
 
 .word-term {
   font-size: 34px;
-  line-height: 1.2;
+  line-height: 1.45;
   font-weight: 800;
   word-break: keep-all;
   overflow-wrap: anywhere;
+}
+
+.word-term ruby {
+  ruby-position: over;
+}
+
+.word-term rt {
+  color: var(--muted);
+  font-size: 0.42em;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .word-reading {

@@ -3,9 +3,16 @@ const state = {
   mode: "auto",
   records: [],
   words: [],
+  wordStatus: "idle",
   byLiteral: new Map(),
   oldToNew: new Map(),
 };
+
+const WORD_TERM = 0;
+const WORD_READING = 1;
+const WORD_MEANINGS = 2;
+const WORD_PARTS = 3;
+const WORD_LEVELS = 4;
 
 const els = {
   query: document.querySelector("#query"),
@@ -30,6 +37,26 @@ function cleanReading(value) {
 
 function cleanWord(value) {
   return cleanReading(value.toLowerCase().replace(/[・･,，、/／]/g, ""));
+}
+
+function wordTerm(record) {
+  return record[WORD_TERM] || "";
+}
+
+function wordReading(record) {
+  return record[WORD_READING] || "";
+}
+
+function wordMeanings(record) {
+  return record[WORD_MEANINGS] || [];
+}
+
+function wordParts(record) {
+  return record[WORD_PARTS] || [];
+}
+
+function wordLevels(record) {
+  return record[WORD_LEVELS] || [];
 }
 
 function labelList(values, empty = "자료 없음") {
@@ -61,7 +88,7 @@ function buildSearchText(record) {
 }
 
 function buildWordSearchText(record) {
-  return [record.term, record.reading, ...record.meanings, ...record.partsOfSpeech, ...record.levels]
+  return [wordTerm(record), wordReading(record), ...wordMeanings(record), ...wordParts(record), ...wordLevels(record)]
     .join(" ")
     .toLowerCase();
 }
@@ -106,11 +133,11 @@ function findKanjiMatches(rawQuery) {
 }
 
 function wordScore(record, query, foldedQuery) {
-  const term = record.term.toLowerCase();
-  const reading = record.reading.toLowerCase();
-  const foldedTerm = cleanWord(record.term);
-  const foldedReading = cleanWord(record.reading);
-  const meanings = record.meanings.join(" ").toLowerCase();
+  const term = wordTerm(record).toLowerCase();
+  const reading = wordReading(record).toLowerCase();
+  const foldedTerm = cleanWord(wordTerm(record));
+  const foldedReading = cleanWord(wordReading(record));
+  const meanings = wordMeanings(record).join(" ").toLowerCase();
   const searchText = buildWordSearchText(record);
 
   if (term === query || reading === query) return 0;
@@ -132,7 +159,7 @@ function findWordMatches(rawQuery) {
   return state.words
     .map((record) => ({ record, score: wordScore(record, query, foldedQuery) }))
     .filter((hit) => hit.score !== null)
-    .sort((a, b) => a.score - b.score || a.record.term.length - b.record.term.length || a.record.term.localeCompare(b.record.term, "ja"))
+    .sort((a, b) => a.score - b.score || wordTerm(a.record).length - wordTerm(b.record).length || wordTerm(a.record).localeCompare(wordTerm(b.record), "ja"))
     .slice(0, 100);
 }
 
@@ -163,21 +190,68 @@ function renderCard(hit) {
   return node;
 }
 
+function hasKanji(value) {
+  return /\p{Script=Han}/u.test(value);
+}
+
+function isKanji(value) {
+  return /^\p{Script=Han}+$/u.test(value);
+}
+
+function primaryReading(value) {
+  return value.split(/[・･]/, 1)[0] || value;
+}
+
+function createRubyForTerm(term, reading) {
+  const fragment = document.createDocumentFragment();
+  const kana = primaryReading(reading || "");
+  if (!term || !kana || !hasKanji(term)) {
+    fragment.append(document.createTextNode(term));
+    return fragment;
+  }
+
+  const tokens = term.match(/\p{Script=Han}+|[^\p{Script=Han}]+/gu) || [term];
+  let readingIndex = 0;
+  tokens.forEach((token, index) => {
+    if (!isKanji(token)) {
+      fragment.append(document.createTextNode(token));
+      if (kana.startsWith(token, readingIndex)) readingIndex += token.length;
+      return;
+    }
+
+    const nextKana = tokens.slice(index + 1).find((item) => !isKanji(item) && /[\u3041-\u3096\u30a1-\u30fa]/.test(item));
+    const nextIndex = nextKana ? kana.indexOf(nextKana, readingIndex) : -1;
+    const rubyText = nextIndex >= readingIndex ? kana.slice(readingIndex, nextIndex) : kana.slice(readingIndex);
+    if (rubyText) readingIndex += rubyText.length;
+
+    const ruby = document.createElement("ruby");
+    ruby.append(document.createTextNode(token));
+    const rt = document.createElement("rt");
+    rt.textContent = rubyText || kana;
+    ruby.append(rt);
+    fragment.append(ruby);
+  });
+  return fragment;
+}
+
 function renderWordCard(hit) {
   const node = els.wordTemplate.content.firstElementChild.cloneNode(true);
   const { record } = hit;
-  node.querySelector(".word-term").textContent = record.term;
+  const term = wordTerm(record);
+  const readingValue = wordReading(record);
+  const termNode = node.querySelector(".word-term");
+  termNode.replaceChildren(createRubyForTerm(term, readingValue));
 
   const reading = node.querySelector(".word-reading");
-  if (record.reading && record.reading !== record.term) {
-    reading.textContent = record.reading;
+  if (readingValue && readingValue !== term && (!hasKanji(term) || /[・･]/.test(readingValue))) {
+    reading.textContent = readingValue;
   } else {
     reading.classList.add("hidden");
   }
 
-  node.querySelector(".word-meanings").textContent = labelList(record.meanings);
-  node.querySelector(".word-pos").textContent = labelList(record.partsOfSpeech);
-  node.querySelector(".word-levels").textContent = labelList(record.levels);
+  node.querySelector(".word-meanings").textContent = labelList(wordMeanings(record));
+  node.querySelector(".word-pos").textContent = labelList(wordParts(record));
+  node.querySelector(".word-levels").textContent = labelList(wordLevels(record));
   return node;
 }
 
@@ -200,6 +274,12 @@ function renderReadingList(target, readings) {
 }
 
 function render() {
+  if (state.dictionary === "words" && state.wordStatus !== "ready") {
+    els.results.replaceChildren();
+    els.status.textContent = state.wordStatus === "error" ? "단어 데이터를 불러오지 못했습니다." : "단어 데이터를 불러오는 중...";
+    return;
+  }
+
   const hits = state.dictionary === "kanji" ? findKanjiMatches(els.query.value) : findWordMatches(els.query.value);
   els.results.replaceChildren(...hits.map(state.dictionary === "kanji" ? renderCard : renderWordCard));
   if (!els.query.value.trim()) {
@@ -221,14 +301,28 @@ function setDictionary(dictionary) {
   els.query.placeholder = dictionary === "kanji" ? "예: 亞, 亜, ア, あ, ひがし" : "예: 学校, がっこう, 배우다, 日本語";
   els.query.value = "";
   render();
+  if (dictionary === "words" && state.wordStatus === "idle") loadWords();
+}
+
+async function loadWords() {
+  state.wordStatus = "loading";
+  render();
+  try {
+    const response = await fetch("data/words.json");
+    const payload = await response.json();
+    state.words = payload.records;
+    state.wordStatus = "ready";
+  } catch (error) {
+    state.wordStatus = "error";
+    console.error(error);
+  }
+  render();
 }
 
 async function init() {
-  const [kanjiResponse, wordResponse] = await Promise.all([fetch("data/kanji.json"), fetch("data/words.json")]);
+  const kanjiResponse = await fetch("data/kanji.json");
   const payload = await kanjiResponse.json();
-  const wordPayload = await wordResponse.json();
   state.records = payload.records;
-  state.words = wordPayload.records;
   state.byLiteral = new Map(payload.records.map((record) => [record.literal, record]));
   state.oldToNew = new Map(Object.entries(payload.oldToNew));
   render();

@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "data" / "krdict-json"
 TARGET = ROOT / "data" / "words.json"
-MAX_MEANINGS = 12
+MAX_MEANINGS = 8
 EMPTY_MARKERS = {"", "없음"}
 
 
@@ -90,6 +90,16 @@ def clean_meta(values):
     return [value for value in unique(values) if value not in EMPTY_MARKERS]
 
 
+def compact_record(record):
+    return [
+        record["term"],
+        record["reading"],
+        record["meanings"],
+        record["partsOfSpeech"],
+        record["levels"],
+    ]
+
+
 def main():
     if not SOURCE_DIR.exists():
         raise SystemExit(f"Missing {SOURCE_DIR}. Download and extract krdict-json first.")
@@ -142,7 +152,8 @@ def main():
             "url": "https://krdict.korean.go.kr/download/downloadPopup",
             "provider": "국립국어원",
         },
-        "records": sorted(records, key=reading_sort_key),
+        "schema": ["term", "reading", "meanings", "partsOfSpeech", "levels"],
+        "records": [compact_record(record) for record in sorted(records, key=reading_sort_key)],
     }
     TARGET.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"Wrote {TARGET} with {len(records)} Japanese word entries.")
