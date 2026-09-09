@@ -9,10 +9,28 @@ SOURCE_DIR = ROOT / "data" / "krdict-json"
 TARGET_DIR = ROOT / "data" / "words"
 META_TARGET = TARGET_DIR / "meta.json"
 OLD_TARGET = ROOT / "data" / "words.json"
-MAX_MEANINGS = 8
+MAX_MEANINGS = 3
 EMPTY_MARKERS = {"", "없음"}
 COMMON_LEVELS = {"초급", "중급"}
+LEVEL_RANKS = {"초급": 0, "중급": 1, "고급": 2}
 GRAMMAR_ONLY_PARTS = {"어미", "조사", "접사", "의존 명사", "보조 동사", "보조 형용사", "품사 없음"}
+PART_RANKS = {
+    "명사": 0,
+    "동사": 1,
+    "형용사": 2,
+    "부사": 3,
+    "관형사": 4,
+    "대명사": 5,
+    "수사": 6,
+    "감탄사": 7,
+    "보조 동사": 8,
+    "보조 형용사": 9,
+    "의존 명사": 10,
+    "접사": 11,
+    "조사": 12,
+    "어미": 13,
+    "품사 없음": 99,
+}
 INVALID_WORD_PATTERN = re.compile(r"[#…()[\]{}<>「」『』【】（）]")
 ALLOWED_TERM_PATTERN = re.compile(r"^[A-Za-z0-9\u3040-\u30ff\u3400-\u9fff\uff10-\uff5a々〆ヶー・･]+$")
 PHRASE_MARKER_PATTERN = re.compile(r"(を|にも|では|とは|から|まで|より|している|してある|になる|にする|が良い|が悪い|がある|がない)")
@@ -105,17 +123,50 @@ def japanese_entries(value):
     return entries
 
 
-def reading_sort_key(record):
+def level_rank(value):
+    return LEVEL_RANKS.get(value, 9)
+
+
+def best_level_rank(record):
+    ranks = [level_rank(level) for level in record["levels"]]
+    return min(ranks) if ranks else 8
+
+
+def part_sort_key(value):
+    return (PART_RANKS.get(value, 50), value)
+
+
+def meaning_sort_key(record, meaning):
+    rank = record["meaningRanks"].get(meaning, 9)
+    has_affix_mark = meaning.startswith("-") or meaning.endswith("-")
+    has_space = " " in meaning
+    mixed = not re.fullmatch(r"[가-힣-]+", meaning)
+    return (rank, has_affix_mark, has_space, mixed, len(meaning), meaning)
+
+
+def record_sort_key(record):
+    reading = clean_search_value(record["reading"] or record["term"])
     return (
-        0 if record["reading"] else 1,
+        reading,
+        best_level_rank(record),
         len(record["term"]),
         record["term"],
-        record["reading"],
     )
 
 
 def clean_meta(values):
     return [value for value in unique(values) if value not in EMPTY_MARKERS]
+
+
+def clean_parts(values):
+    values = clean_meta(values)
+    if len(values) > 1 and "품사 없음" in values:
+        values.remove("품사 없음")
+    return sorted(values, key=part_sort_key)
+
+
+def clean_levels(values):
+    return sorted(clean_meta(values), key=lambda value: (level_rank(value), value))
 
 
 def compact_record(record):
@@ -209,19 +260,22 @@ def main():
                                 "term": term,
                                 "reading": reading,
                                 "meanings": [],
+                                "meaningRanks": {},
                                 "partsOfSpeech": [],
                                 "levels": [],
                             },
                         )
                         record["meanings"].append(korean)
+                        current_rank = record["meaningRanks"].get(korean, 9)
+                        record["meaningRanks"][korean] = min(current_rank, level_rank(level))
                         record["partsOfSpeech"].append(part_of_speech)
                         record["levels"].append(level)
 
     records = []
     for record in records_by_key.values():
-        record["meanings"] = unique(record["meanings"])[:MAX_MEANINGS]
-        record["partsOfSpeech"] = clean_meta(record["partsOfSpeech"])
-        record["levels"] = clean_meta(record["levels"])
+        record["meanings"] = sorted(unique(record["meanings"]), key=lambda meaning: meaning_sort_key(record, meaning))[:MAX_MEANINGS]
+        record["partsOfSpeech"] = clean_parts(record["partsOfSpeech"])
+        record["levels"] = clean_levels(record["levels"])
         if is_usable_record(record):
             records.append(record)
 
@@ -232,7 +286,7 @@ def main():
         OLD_TARGET.unlink()
 
     buckets = {}
-    for record in sorted(records, key=reading_sort_key):
+    for record in sorted(records, key=record_sort_key):
         compact = compact_record(record)
         for key in bucket_keys(record):
             if key:

@@ -3,6 +3,11 @@ const WORD_READING = 1;
 const WORD_MEANINGS = 2;
 const WORD_PARTS = 3;
 const WORD_LEVELS = 4;
+const LEVEL_RANKS = new Map([
+  ["초급", 0],
+  ["중급", 1],
+  ["고급", 2],
+]);
 
 const state = {
   count: null,
@@ -59,6 +64,14 @@ function wordLevels(record) {
   return record[WORD_LEVELS] || [];
 }
 
+function wordLevelRank(record) {
+  return Math.min(...wordLevels(record).map((level) => LEVEL_RANKS.get(level) ?? 9), 8);
+}
+
+function wordSortValue(record) {
+  return cleanWord(wordReading(record) || wordTerm(record));
+}
+
 function labelList(values, empty = "자료 없음") {
   return values && values.length ? values.join(" · ") : empty;
 }
@@ -74,6 +87,7 @@ function wordScore(record, query, foldedQuery) {
   const reading = wordReading(record).toLowerCase();
   const foldedTerm = cleanWord(wordTerm(record));
   const foldedReading = cleanWord(wordReading(record));
+  const meaningList = wordMeanings(record).map((meaning) => meaning.toLowerCase());
   const meanings = wordMeanings(record).join(" ").toLowerCase();
   const searchText = buildSearchText(record);
 
@@ -83,9 +97,23 @@ function wordScore(record, query, foldedQuery) {
   if (foldedTerm.startsWith(foldedQuery) || foldedReading.startsWith(foldedQuery)) return 3;
   if (term.includes(query) || reading.includes(query)) return 4;
   if (foldedTerm.includes(foldedQuery) || foldedReading.includes(foldedQuery)) return 5;
-  if (meanings.includes(query)) return 6;
-  if (searchText.includes(query)) return 7;
+  if (meaningList.includes(query)) return 6;
+  if (meaningList.some((meaning) => meaning.startsWith(query))) return 7;
+  if (meanings.includes(query)) return 8;
+  if (searchText.includes(query)) return 9;
   return null;
+}
+
+function meaningMatchRank(record, query) {
+  const meanings = wordMeanings(record).map((meaning) => meaning.toLowerCase());
+  const exactIndex = meanings.findIndex((meaning) => meaning === query);
+  if (exactIndex >= 0) return exactIndex;
+  const prefixIndex = meanings.findIndex((meaning) => meaning.startsWith(query));
+  return prefixIndex >= 0 ? prefixIndex + 20 : 99;
+}
+
+function meaningBreadth(record, score) {
+  return score >= 6 ? wordMeanings(record).length : 0;
 }
 
 function findMatches(rawQuery, records) {
@@ -96,7 +124,15 @@ function findMatches(rawQuery, records) {
   return records
     .map((record) => ({ record, score: wordScore(record, query, foldedQuery) }))
     .filter((hit) => hit.score !== null)
-    .sort((a, b) => a.score - b.score || wordTerm(a.record).length - wordTerm(b.record).length || wordTerm(a.record).localeCompare(wordTerm(b.record), "ja"))
+    .sort((a, b) =>
+      a.score - b.score ||
+      meaningMatchRank(a.record, query) - meaningMatchRank(b.record, query) ||
+      meaningBreadth(a.record, a.score) - meaningBreadth(b.record, b.score) ||
+      wordLevelRank(a.record) - wordLevelRank(b.record) ||
+      wordSortValue(a.record).localeCompare(wordSortValue(b.record), "ja") ||
+      wordTerm(a.record).length - wordTerm(b.record).length ||
+      wordTerm(a.record).localeCompare(wordTerm(b.record), "ja")
+    )
     .slice(0, 100);
 }
 
