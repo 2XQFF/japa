@@ -288,6 +288,16 @@ function compareHits(a, b, query) {
   );
 }
 
+function dedupeHits(hits) {
+  const seen = new Set();
+  return hits.filter((hit) => {
+    const key = `${wordTerm(hit.record)}\t${wordMeanings(hit.record).join("\t")}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function displayMeanings(record, rawQuery) {
   const query = rawQuery.trim().toLowerCase();
   const meanings = wordMeanings(record);
@@ -311,11 +321,11 @@ function findMatches(rawQuery, records) {
   if (!query) return [];
 
   const foldedQuery = cleanWord(query);
-  return records
+  const hits = records
     .map((record) => ({ record, score: wordScore(record, query, foldedQuery) }))
     .filter((hit) => hit.score !== null)
-    .sort((a, b) => compareHits(a, b, query))
-    .slice(0, 100);
+    .sort((a, b) => compareHits(a, b, query));
+  return dedupeHits(hits).slice(0, 100);
 }
 
 function hasKanji(value) {

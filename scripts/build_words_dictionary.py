@@ -290,6 +290,20 @@ def record_sort_key(record):
     )
 
 
+def duplicate_record_sort_key(record):
+    reading = record["reading"]
+    clean_reading = clean_search_value(reading or record["term"])
+    return (
+        record["frequencyRank"],
+        "・" in reading or "･" in reading,
+        -record["sourceCount"],
+        best_level_rank(record),
+        len(clean_reading),
+        clean_reading,
+        record["term"],
+    )
+
+
 def clean_meta(values):
     return [value for value in unique(values) if value not in EMPTY_MARKERS]
 
@@ -453,6 +467,39 @@ def apply_jmdict_features(record, features):
     record["frequencyRank"] = frequency_rank
 
 
+def merge_duplicate_record_group(group):
+    merged = dict(sorted(group, key=duplicate_record_sort_key)[0])
+    merged["partsOfSpeech"] = clean_parts(
+        part
+        for record in group
+        for part in record["partsOfSpeech"]
+    )
+    merged["levels"] = clean_levels(
+        level
+        for record in group
+        for level in record["levels"]
+    )
+    merged["wordClasses"] = sorted(
+        unique(
+            word_class
+            for record in group
+            for word_class in record["wordClasses"]
+        ),
+        key=word_class_sort_key,
+    )
+    merged["frequencyRank"] = min(record["frequencyRank"] for record in group)
+    merged["sourceCount"] = sum(record["sourceCount"] for record in group)
+    return merged
+
+
+def dedupe_records(records):
+    groups = {}
+    for record in records:
+        key = (record["term"], tuple(record["meanings"]))
+        groups.setdefault(key, []).append(record)
+    return [merge_duplicate_record_group(group) for group in groups.values()]
+
+
 def compact_record(record):
     return [
         record["term"],
@@ -574,6 +621,7 @@ def main():
         apply_jmdict_features(record, jmdict_features)
         if is_usable_record(record):
             records.append(record)
+    records = dedupe_records(records)
 
     TARGET_DIR.mkdir(parents=True, exist_ok=True)
     for path in TARGET_DIR.glob("*.json"):
