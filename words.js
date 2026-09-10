@@ -6,6 +6,7 @@ const WORD_LEVELS = 4;
 const WORD_CLASSES = 5;
 const WORD_FREQUENCY_RANK = 6;
 const WORD_SOURCE_COUNT = 7;
+const WORD_DATA_VERSION = "20260910-single-kanji-2";
 const LEVEL_RANKS = new Map([
   ["초급", 0],
   ["중급", 1],
@@ -154,6 +155,10 @@ function bucketKey(value) {
 
 function bucketFilename(key) {
   return key ? `u${key.codePointAt(0).toString(16)}.json` : "";
+}
+
+function wordDataUrl(filename) {
+  return `data/words/${filename}?v=${WORD_DATA_VERSION}`;
 }
 
 function wordTerm(record) {
@@ -436,7 +441,7 @@ async function loadBucket(filename) {
   if (state.bucketStatus.get(filename) === "loading") return;
   state.bucketStatus.set(filename, "loading");
   try {
-    const response = await fetch(`data/words/${filename}`);
+    const response = await fetch(wordDataUrl(filename), { cache: "no-cache" });
     if (!response.ok) {
       state.buckets.set(filename, []);
       state.bucketStatus.set(filename, "ready");
@@ -455,7 +460,7 @@ async function loadBucket(filename) {
 
 async function init() {
   try {
-    const response = await fetch("data/words/meta.json");
+    const response = await fetch(wordDataUrl("meta.json"), { cache: "no-cache" });
     const payload = await response.json();
     state.count = payload.count;
   } catch (error) {
