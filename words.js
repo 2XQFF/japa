@@ -6,7 +6,7 @@ const WORD_LEVELS = 4;
 const WORD_CLASSES = 5;
 const WORD_FREQUENCY_RANK = 6;
 const WORD_SOURCE_COUNT = 7;
-const WORD_DATA_VERSION = "20260910-single-kanji-2";
+const WORD_DATA_VERSION = "20260910-verb-meanings-2";
 const LEVEL_RANKS = new Map([
   ["초급", 0],
   ["중급", 1],
