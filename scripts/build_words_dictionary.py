@@ -549,7 +549,7 @@ def is_usable_record(record):
         and has_dictionary_part(record)
         and is_clean_word_form(record["term"])
         and (not record["reading"] or is_clean_word_form(record["reading"]))
-        and not is_single_han_term(record["term"])
+        and (not is_single_han_term(record["term"]) or bool(record["reading"]))
     )
 
 
