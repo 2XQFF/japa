@@ -1,11 +1,14 @@
 import html
 import json
 import re
+import gzip
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "data" / "krdict-json"
+JMDICT_SOURCE = ROOT / "data" / "JMdict_e.gz"
 TARGET_DIR = ROOT / "data" / "words"
 META_TARGET = TARGET_DIR / "meta.json"
 OLD_TARGET = ROOT / "data" / "words.json"
@@ -142,6 +145,21 @@ CANONICAL_MEANINGS = {
     "辛い:からい": ["맵다"],
     "辛い:つらい": ["괴롭다"],
 }
+CANONICAL_WORD_CLASSES = {
+    "する": ["변칙동사"],
+    "為る:する": ["변칙동사"],
+    "来る": ["변칙동사"],
+    "くる": ["변칙동사"],
+    "好きだ": ["형용동사"],
+    "嫌いだ": ["형용동사"],
+}
+WORD_CLASS_RANKS = {
+    "5단동사": 0,
+    "1단동사": 1,
+    "변칙동사": 2,
+    "い형용사": 3,
+    "형용동사": 4,
+}
 INVALID_WORD_PATTERN = re.compile(r"[#…()[\]{}<>「」『』【】（）]")
 ALLOWED_TERM_PATTERN = re.compile(r"^[A-Za-z0-9\u3040-\u30ff\u3400-\u9fff\uff10-\uff5a々〆ヶー・･]+$")
 PHRASE_MARKER_PATTERN = re.compile(r"(を|にも|では|とは|から|まで|より|している|してある|になる|にする|が良い|が悪い|がある|がない)")
@@ -256,12 +274,18 @@ def meaning_sort_key(record, meaning):
     return (rank, has_affix_mark, has_space, mixed, -count, len(meaning), meaning)
 
 
+def word_class_sort_key(value):
+    return (WORD_CLASS_RANKS.get(value, 99), value)
+
+
 def record_sort_key(record):
     reading = clean_search_value(record["reading"] or record["term"])
     return (
-        reading,
+        record["frequencyRank"],
+        -record["sourceCount"],
         best_level_rank(record),
         len(record["term"]),
+        reading,
         record["term"],
     )
 
@@ -301,6 +325,134 @@ def canonical_meanings(record):
     return []
 
 
+def priority_rank(values):
+    best = 9000
+    for value in values:
+        if not value:
+            continue
+        if value.startswith("nf") and value[2:].isdigit():
+            best = min(best, int(value[2:]))
+        elif value == "ichi1":
+            best = min(best, 60)
+        elif value == "news1":
+            best = min(best, 80)
+        elif value == "spec1":
+            best = min(best, 100)
+        elif value == "gai1":
+            best = min(best, 120)
+        elif value == "ichi2":
+            best = min(best, 160)
+        elif value == "news2":
+            best = min(best, 180)
+        elif value == "spec2":
+            best = min(best, 200)
+        elif value == "gai2":
+            best = min(best, 220)
+    return best
+
+
+def classes_from_jmdict_pos(values):
+    classes = []
+    text = " ".join(values)
+    if "Godan verb" in text:
+        classes.append("5단동사")
+    if "Ichidan verb" in text:
+        classes.append("1단동사")
+    if "suru verb" in text or "Kuru verb" in text or "irregular nu verb" in text:
+        classes.append("변칙동사")
+    if "adjective (keiyoushi)" in text:
+        classes.append("い형용사")
+    if "adjectival nouns or quasi-adjectives" in text:
+        classes.append("형용동사")
+    return sorted(unique(classes), key=word_class_sort_key)
+
+
+def merge_jmdict_feature(features, key, priorities, positions):
+    if not key:
+        return
+    feature = features.setdefault(key, {"frequencyRank": 9000, "classes": []})
+    feature["frequencyRank"] = min(feature["frequencyRank"], priority_rank(priorities))
+    feature["classes"] = unique(feature["classes"] + classes_from_jmdict_pos(positions))
+
+
+def load_jmdict_features():
+    features = {}
+    if not JMDICT_SOURCE.exists():
+        return features
+
+    with gzip.open(JMDICT_SOURCE, "rt", encoding="utf-8") as source:
+        for _event, elem in ET.iterparse(source, events=("end",)):
+            if elem.tag != "entry":
+                continue
+
+            kanji_forms = [item.text for item in elem.findall("./k_ele/keb") if item.text]
+            reading_forms = [item.text for item in elem.findall("./r_ele/reb") if item.text]
+            priorities = [
+                item.text
+                for item in elem.findall("./k_ele/ke_pri") + elem.findall("./r_ele/re_pri")
+                if item.text
+            ]
+            positions = [item.text for item in elem.findall("./sense/pos") if item.text]
+
+            for term in kanji_forms:
+                merge_jmdict_feature(features, f"{term}\t", priorities, positions)
+                for reading in reading_forms:
+                    merge_jmdict_feature(features, f"{term}\t{reading}", priorities, positions)
+            for reading in reading_forms:
+                merge_jmdict_feature(features, f"{reading}\t", priorities, positions)
+
+            elem.clear()
+    return features
+
+
+def record_jmdict_keys(record):
+    term = record["term"]
+    reading = primary_reading(record["reading"])
+    keys = [
+        f"{term}\t{reading}" if reading else "",
+        f"{term}\t",
+    ]
+    if term.endswith("だ"):
+        base = term[:-1]
+        base_reading = reading[:-1] if reading.endswith("だ") else reading
+        keys.extend(
+            [
+                f"{base}\t{base_reading}" if base_reading else "",
+                f"{base}\t",
+            ]
+        )
+    return [key for key in keys if key]
+
+
+def canonical_word_classes(record):
+    term = record["term"]
+    reading = primary_reading(record["reading"])
+    keys = [
+        f"{term}:{reading}" if reading else "",
+        term,
+        clean_search_value(term),
+    ]
+    for key in keys:
+        values = CANONICAL_WORD_CLASSES.get(key)
+        if values:
+            return values
+    return []
+
+
+def apply_jmdict_features(record, features):
+    classes = canonical_word_classes(record)
+    frequency_rank = 9000
+    for key in record_jmdict_keys(record):
+        feature = features.get(key)
+        if not feature:
+            continue
+        frequency_rank = min(frequency_rank, feature["frequencyRank"])
+        if not classes:
+            classes = unique(classes + feature["classes"])
+    record["wordClasses"] = sorted(classes, key=word_class_sort_key)
+    record["frequencyRank"] = frequency_rank
+
+
 def compact_record(record):
     return [
         record["term"],
@@ -308,6 +460,9 @@ def compact_record(record):
         record["meanings"],
         record["partsOfSpeech"],
         record["levels"],
+        record["wordClasses"],
+        record["frequencyRank"],
+        record["sourceCount"],
     ]
 
 
@@ -365,6 +520,7 @@ def main():
     if not SOURCE_DIR.exists():
         raise SystemExit(f"Missing {SOURCE_DIR}. Download and extract krdict-json first.")
 
+    jmdict_features = load_jmdict_features()
     records_by_key = {}
     for path in sorted(SOURCE_DIR.glob("*.json")):
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -396,9 +552,13 @@ def main():
                                 "meaningCounts": {},
                                 "partsOfSpeech": [],
                                 "levels": [],
+                                "wordClasses": [],
+                                "frequencyRank": 9000,
+                                "sourceCount": 0,
                             },
                         )
                         record["meanings"].append(korean)
+                        record["sourceCount"] += 1
                         record["meaningCounts"][korean] = record["meaningCounts"].get(korean, 0) + 1
                         current_rank = record["meaningRanks"].get(korean, 9)
                         record["meaningRanks"][korean] = min(current_rank, level_rank(level))
@@ -411,6 +571,7 @@ def main():
         record["meanings"] = canonical or sorted(unique(record["meanings"]), key=lambda meaning: meaning_sort_key(record, meaning))[:MAX_MEANINGS]
         record["partsOfSpeech"] = clean_parts(record["partsOfSpeech"])
         record["levels"] = clean_levels(record["levels"])
+        apply_jmdict_features(record, jmdict_features)
         if is_usable_record(record):
             records.append(record)
 
@@ -440,7 +601,12 @@ def main():
             "url": "https://krdict.korean.go.kr/download/downloadPopup",
             "provider": "국립국어원",
         },
-        "schema": ["term", "reading", "meanings", "partsOfSpeech", "levels"],
+        "jmdictSource": {
+            "name": "JMdict",
+            "url": "https://www.edrdg.org/jmdict/j_jmdict.html",
+            "optional": True,
+        },
+        "schema": ["term", "reading", "meanings", "partsOfSpeech", "levels", "wordClasses", "frequencyRank", "sourceCount"],
         "count": len(records),
     }
     META_TARGET.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

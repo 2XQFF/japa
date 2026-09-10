@@ -3,6 +3,9 @@ const WORD_READING = 1;
 const WORD_MEANINGS = 2;
 const WORD_PARTS = 3;
 const WORD_LEVELS = 4;
+const WORD_CLASSES = 5;
+const WORD_FREQUENCY_RANK = 6;
+const WORD_SOURCE_COUNT = 7;
 const LEVEL_RANKS = new Map([
   ["초급", 0],
   ["중급", 1],
@@ -75,6 +78,18 @@ function wordLevels(record) {
   return record[WORD_LEVELS] || [];
 }
 
+function wordClasses(record) {
+  return record[WORD_CLASSES] || [];
+}
+
+function wordFrequencyRank(record) {
+  return record[WORD_FREQUENCY_RANK] ?? 9000;
+}
+
+function wordSourceCount(record) {
+  return record[WORD_SOURCE_COUNT] || 0;
+}
+
 function wordLevelRank(record) {
   return Math.min(...wordLevels(record).map((level) => LEVEL_RANKS.get(level) ?? 9), 8);
 }
@@ -92,7 +107,7 @@ function labelList(values, empty = "자료 없음") {
 }
 
 function buildSearchText(record) {
-  return [wordTerm(record), wordReading(record), ...wordMeanings(record), ...wordParts(record), ...wordLevels(record)]
+  return [wordTerm(record), wordReading(record), ...wordMeanings(record), ...wordParts(record), ...wordClasses(record), ...wordLevels(record)]
     .join(" ")
     .toLowerCase();
 }
@@ -170,6 +185,8 @@ function findMatches(rawQuery, records) {
       preferredMeaningRank(a.record, query) - preferredMeaningRank(b.record, query) ||
       meaningMatchRank(a.record, query) - meaningMatchRank(b.record, query) ||
       meaningBreadth(a.record, a.score) - meaningBreadth(b.record, b.score) ||
+      wordFrequencyRank(a.record) - wordFrequencyRank(b.record) ||
+      wordSourceCount(b.record) - wordSourceCount(a.record) ||
       wordLevelRank(a.record) - wordLevelRank(b.record) ||
       wordSortValue(a.record).localeCompare(wordSortValue(b.record), "ja") ||
       wordTerm(a.record).length - wordTerm(b.record).length ||
@@ -238,7 +255,7 @@ function renderCard(hit, query) {
   }
 
   node.querySelector(".word-meanings").textContent = labelList(displayMeanings(record, query));
-  node.querySelector(".word-pos").textContent = labelList(wordParts(record));
+  node.querySelector(".word-pos").textContent = labelList([...wordParts(record), ...wordClasses(record)]);
   node.querySelector(".word-levels").textContent = labelList(wordLevels(record));
   return node;
 }
