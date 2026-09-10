@@ -13,14 +13,112 @@ const LEVEL_RANKS = new Map([
 ]);
 const KOREAN_QUERY_WORD_RANKS = new Map([
   ["되다", new Map([["なる", 0], ["出来る", 1], ["できる", 1], ["成る", 2]])],
-  ["하다", new Map([["する", 0], ["為る", 1]])],
+  ["하다", new Map([["する", 0], ["為る:する", 1]])],
   ["있다", new Map([["ある", 0], ["有る", 1], ["いる", 2], ["居る", 3]])],
   ["없다", new Map([["ない", 0], ["無い", 1]])],
-  ["가다", new Map([["行く", 0], ["いく", 0], ["ゆく", 1], ["逝く", 2]])],
+  ["좋다", new Map([["いい", 0], ["良い", 1]])],
+  ["좋아하다", new Map([["好きだ", 0], ["好む", 1], ["好く", 2]])],
+  ["싫다", new Map([["嫌いだ", 0]])],
+  ["나쁘다", new Map([["悪い", 0]])],
+  ["크다", new Map([["大きい", 0]])],
+  ["작다", new Map([["小さい", 0]])],
+  ["많다", new Map([["多い", 0]])],
+  ["적다", new Map([["少ない", 0]])],
+  ["높다", new Map([["高い", 0]])],
+  ["비싸다", new Map([["高い", 0]])],
+  ["싸다", new Map([["安い", 0]])],
+  ["새롭다", new Map([["新しい", 0]])],
+  ["낡다", new Map([["古い", 0]])],
+  ["빠르다", new Map([["早い", 0]])],
+  ["늦다", new Map([["遅い", 0]])],
+  ["덥다", new Map([["暑い", 0]])],
+  ["뜨겁다", new Map([["熱い", 0]])],
+  ["춥다", new Map([["寒い", 0]])],
+  ["차갑다", new Map([["冷たい", 0]])],
+  ["좁다", new Map([["狭い", 0]])],
+  ["넓다", new Map([["広い", 0]])],
+  ["쉽다", new Map([["易しい", 0]])],
+  ["어렵다", new Map([["難しい", 0]])],
+  ["재미있다", new Map([["面白い", 0]])],
+  ["파랗다", new Map([["青い", 0]])],
+  ["푸르다", new Map([["青い", 0]])],
+  ["붉다", new Map([["赤い", 0]])],
+  ["빨갛다", new Map([["赤い", 0]])],
+  ["하얗다", new Map([["白い", 0]])],
+  ["검다", new Map([["黒い", 0]])],
+  ["가다", new Map([["行く:いく", 0], ["行く:ゆく", 1], ["行く", 1], ["いく", 2], ["ゆく", 3], ["逝く", 4]])],
   ["오다", new Map([["来る", 0], ["くる", 0]])],
   ["보다", new Map([["見る", 0], ["みる", 0]])],
+  ["듣다", new Map([["聞く", 0]])],
+  ["읽다", new Map([["読む", 0]])],
+  ["쓰다", new Map([["使う", 0], ["書く", 1]])],
+  ["먹다", new Map([["食べる", 0], ["食う", 1], ["喰う", 2]])],
+  ["마시다", new Map([["飲む", 0]])],
+  ["자다", new Map([["寝る", 0]])],
+  ["일어나다", new Map([["起きる", 0]])],
+  ["사다", new Map([["買う", 0]])],
+  ["팔다", new Map([["売る", 0]])],
+  ["기다리다", new Map([["待つ", 0]])],
+  ["만들다", new Map([["作る", 0]])],
+  ["잡다", new Map([["取る", 0]])],
+  ["가지다", new Map([["持つ", 0]])],
+  ["생각하다", new Map([["思う", 0]])],
   ["말하다", new Map([["言う", 0], ["いう", 0], ["話す", 1], ["はなす", 1]])],
   ["알다", new Map([["分かる", 0], ["わかる", 0], ["知る", 1], ["しる", 1]])],
+  ["울다", new Map([["鳴る", 0]])],
+  ["만나다", new Map([["会う", 0]])],
+  ["돌아가다", new Map([["帰る", 0]])],
+  ["걷다", new Map([["歩く", 0]])],
+  ["달리다", new Map([["走る", 0]])],
+  ["헤엄치다", new Map([["泳ぐ", 0]])],
+  ["쉬다", new Map([["休む", 0]])],
+  ["일하다", new Map([["働く", 0]])],
+  ["공부하다", new Map([["勉強する", 0], ["学習する", 1], ["勉学する", 2]])],
+  ["가르치다", new Map([["教える", 0]])],
+  ["배우다", new Map([["習う", 0]])],
+  ["잊다", new Map([["忘れる", 0]])],
+  ["기억하다", new Map([["覚える", 0]])],
+  ["죽다", new Map([["死ぬ", 0]])],
+  ["태어나다", new Map([["生まれる", 0]])],
+  ["살다", new Map([["住む", 0]])],
+  ["타다", new Map([["乗る", 0]])],
+  ["내리다", new Map([["下ろす", 0], ["下げる", 1], ["降りる", 2]])],
+  ["입다", new Map([["着る", 0], ["穿く", 1], ["被る", 2]])],
+  ["신다", new Map([["履く", 0]])],
+  ["벗다", new Map([["脱ぐ", 0]])],
+  ["씻다", new Map([["洗う", 0]])],
+  ["닦다", new Map([["磨く", 0]])],
+  ["자르다", new Map([["切る", 0]])],
+  ["빌려주다", new Map([["貸す", 0]])],
+  ["빌리다", new Map([["借りる", 0]])],
+  ["돌려주다", new Map([["返す", 0]])],
+  ["보내다", new Map([["送る", 0]])],
+  ["열다", new Map([["開ける", 0]])],
+  ["열리다", new Map([["開く", 0]])],
+  ["닫다", new Map([["閉める", 0]])],
+  ["닫히다", new Map([["閉まる", 0]])],
+  ["서다", new Map([["立つ", 0]])],
+  ["앉다", new Map([["座る", 0]])],
+  ["올리다", new Map([["上げる", 0]])],
+  ["오르다", new Map([["上がる", 0], ["上る", 1]])],
+  ["내려가다", new Map([["下がる", 0], ["下る", 1]])],
+  ["들어가다", new Map([["入る", 0]])],
+  ["넣다", new Map([["入れる", 0]])],
+  ["나오다", new Map([["出る", 0]])],
+  ["내다", new Map([["出す", 0]])],
+  ["어둡다", new Map([["暗い", 0]])],
+  ["밝다", new Map([["明るい", 0]])],
+  ["가깝다", new Map([["近い", 0]])],
+  ["멀다", new Map([["遠い", 0]])],
+  ["강하다", new Map([["強い", 0]])],
+  ["약하다", new Map([["弱い", 0]])],
+  ["굵다", new Map([["太い", 0]])],
+  ["가늘다", new Map([["細い", 0]])],
+  ["무겁다", new Map([["重い", 0]])],
+  ["가볍다", new Map([["軽い", 0]])],
+  ["달다", new Map([["甘い", 0]])],
+  ["맵다", new Map([["辛い:からい", 0], ["辛い", 0]])],
+  ["괴롭다", new Map([["辛い:つらい", 0], ["辛い", 0]])],
 ]);
 
 const state = {
@@ -148,10 +246,46 @@ function meaningBreadth(record, score) {
 
 function preferredMeaningRank(record, query) {
   if (!isKoreanQuery(query)) return 99;
+  if (!wordMeanings(record).some((meaning) => meaning.toLowerCase() === query)) return 99;
   const ranks = KOREAN_QUERY_WORD_RANKS.get(query);
   if (!ranks) return 99;
   const term = wordTerm(record);
-  return Math.min(ranks.get(term) ?? 99, ranks.get(cleanWord(term)) ?? 99);
+  const reading = primaryReading(wordReading(record));
+  return Math.min(
+    ranks.get(`${term}:${reading}`) ?? 99,
+    ranks.get(term) ?? 99,
+    ranks.get(cleanWord(term)) ?? 99
+  );
+}
+
+function compareWordOrder(a, b) {
+  return (
+    wordFrequencyRank(a.record) - wordFrequencyRank(b.record) ||
+    wordSourceCount(b.record) - wordSourceCount(a.record) ||
+    wordLevelRank(a.record) - wordLevelRank(b.record) ||
+    wordSortValue(a.record).localeCompare(wordSortValue(b.record), "ja") ||
+    wordTerm(a.record).length - wordTerm(b.record).length ||
+    wordTerm(a.record).localeCompare(wordTerm(b.record), "ja")
+  );
+}
+
+function compareHits(a, b, query) {
+  if (isKoreanQuery(query)) {
+    return (
+      meaningMatchRank(a.record, query) - meaningMatchRank(b.record, query) ||
+      preferredMeaningRank(a.record, query) - preferredMeaningRank(b.record, query) ||
+      compareWordOrder(a, b) ||
+      a.score - b.score
+    );
+  }
+
+  return (
+    a.score - b.score ||
+    preferredMeaningRank(a.record, query) - preferredMeaningRank(b.record, query) ||
+    meaningMatchRank(a.record, query) - meaningMatchRank(b.record, query) ||
+    meaningBreadth(a.record, a.score) - meaningBreadth(b.record, b.score) ||
+    compareWordOrder(a, b)
+  );
 }
 
 function displayMeanings(record, rawQuery) {
@@ -180,18 +314,7 @@ function findMatches(rawQuery, records) {
   return records
     .map((record) => ({ record, score: wordScore(record, query, foldedQuery) }))
     .filter((hit) => hit.score !== null)
-    .sort((a, b) =>
-      a.score - b.score ||
-      preferredMeaningRank(a.record, query) - preferredMeaningRank(b.record, query) ||
-      meaningMatchRank(a.record, query) - meaningMatchRank(b.record, query) ||
-      meaningBreadth(a.record, a.score) - meaningBreadth(b.record, b.score) ||
-      wordFrequencyRank(a.record) - wordFrequencyRank(b.record) ||
-      wordSourceCount(b.record) - wordSourceCount(a.record) ||
-      wordLevelRank(a.record) - wordLevelRank(b.record) ||
-      wordSortValue(a.record).localeCompare(wordSortValue(b.record), "ja") ||
-      wordTerm(a.record).length - wordTerm(b.record).length ||
-      wordTerm(a.record).localeCompare(wordTerm(b.record), "ja")
-    )
+    .sort((a, b) => compareHits(a, b, query))
     .slice(0, 100);
 }
 
