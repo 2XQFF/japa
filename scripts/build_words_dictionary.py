@@ -214,6 +214,15 @@ CANONICAL_WORD_CLASSES = {
     "好きだ": ["형용동사"],
     "嫌いだ": ["형용동사"],
 }
+SUPPLEMENTAL_KANJI_COMPOUNDS = {
+    "後述": "후술",
+    "前述": "전술",
+    "上述": "상술",
+    "上記": "상기",
+    "下記": "하기",
+    "前記": "전기",
+    "前掲": "전게",
+}
 WORD_CLASS_RANKS = {
     "5단동사": 0,
     "1단동사": 1,
@@ -387,6 +396,9 @@ def primary_reading(value):
 def canonical_meanings(record):
     term = record["term"]
     reading = primary_reading(record["reading"])
+    supplemental = SUPPLEMENTAL_KANJI_COMPOUNDS.get(term)
+    if supplemental and supplemental in record["meanings"]:
+        return [supplemental]
     keys = [
         f"{term}:{reading}" if reading else "",
         term,
@@ -442,6 +454,20 @@ def classes_from_jmdict_pos(values):
     return sorted(unique(classes), key=word_class_sort_key)
 
 
+def parts_from_jmdict_pos(values):
+    parts = []
+    text = " ".join(values)
+    if "noun" in text:
+        parts.append("명사")
+    if "verb" in text and "aux. verb suru" not in text:
+        parts.append("동사")
+    if "adjective" in text or "adjectival nouns" in text:
+        parts.append("형용사")
+    if "adverb" in text:
+        parts.append("부사")
+    return clean_parts(parts or ["명사"])
+
+
 def merge_jmdict_feature(features, key, priorities, positions):
     if not key:
         return
@@ -478,6 +504,63 @@ def load_jmdict_features():
 
             elem.clear()
     return features
+
+
+def add_record(records_by_key, term, reading, meaning, part_of_speech, level, is_supplemental=False):
+    key = f"{term}\t{reading}"
+    record = records_by_key.setdefault(
+        key,
+        {
+            "term": term,
+            "reading": reading,
+            "meanings": [],
+            "meaningRanks": {},
+            "meaningCounts": {},
+            "partsOfSpeech": [],
+            "levels": [],
+            "wordClasses": [],
+            "frequencyRank": 9000,
+            "sourceCount": 0,
+            "isSupplemental": False,
+        },
+    )
+    record["isSupplemental"] = record.get("isSupplemental", False) or is_supplemental
+    record["meanings"].append(meaning)
+    record["sourceCount"] += 1
+    record["meaningCounts"][meaning] = record["meaningCounts"].get(meaning, 0) + 1
+    current_rank = record["meaningRanks"].get(meaning, 9)
+    record["meaningRanks"][meaning] = min(current_rank, level_rank(level))
+    record["partsOfSpeech"].append(part_of_speech)
+    record["levels"].append(level)
+    return record
+
+
+def add_supplemental_kanji_compounds(records_by_key):
+    if not JMDICT_SOURCE.exists():
+        return
+
+    targets = set(SUPPLEMENTAL_KANJI_COMPOUNDS)
+    with gzip.open(JMDICT_SOURCE, "rt", encoding="utf-8") as source:
+        for _event, elem in ET.iterparse(source, events=("end",)):
+            if elem.tag != "entry":
+                continue
+
+            kanji_forms = [item.text for item in elem.findall("./k_ele/keb") if item.text]
+            matched_forms = [term for term in kanji_forms if term in targets]
+            if not matched_forms:
+                elem.clear()
+                continue
+
+            reading_forms = [item.text for item in elem.findall("./r_ele/reb") if item.text]
+            positions = [item.text for item in elem.findall("./sense/pos") if item.text]
+            parts = parts_from_jmdict_pos(positions)
+            for term in matched_forms:
+                meaning = SUPPLEMENTAL_KANJI_COMPOUNDS[term]
+                for reading in reading_forms[:1]:
+                    for part in parts:
+                        add_record(records_by_key, term, reading, meaning, part, "", is_supplemental=True)
+
+            elem.clear()
 
 
 def record_jmdict_keys(record):
@@ -583,6 +666,9 @@ def has_usable_level(record):
         not record["levels"]
         and bool(record["reading"])
         and len(record["term"]) <= 12
+    ) or (
+        record.get("isSupplemental")
+        and bool(record["reading"])
     )
 
 
@@ -673,6 +759,8 @@ def main():
                         record["partsOfSpeech"].append(part_of_speech)
                         record["levels"].append(level)
 
+    add_supplemental_kanji_compounds(records_by_key)
+
     records = []
     for record in records_by_key.values():
         canonical = canonical_meanings(record)
@@ -714,6 +802,10 @@ def main():
             "name": "JMdict",
             "url": "https://www.edrdg.org/jmdict/j_jmdict.html",
             "optional": True,
+        },
+        "supplementalKanjiCompoundSource": {
+            "name": "JMdict readings with Korean Hanja equivalents",
+            "scope": "selected Japanese kanji compounds missing from Korean basic dictionary data",
         },
         "schema": ["term", "reading", "meanings", "partsOfSpeech", "levels", "wordClasses", "frequencyRank", "sourceCount"],
         "count": len(records),
