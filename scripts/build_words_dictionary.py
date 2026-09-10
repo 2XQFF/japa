@@ -46,6 +46,16 @@ CANONICAL_MEANINGS = {
     "無い": ["없다"],
     "いい": ["좋다"],
     "良い": ["좋다"],
+    "悪い": ["나쁘다"],
+    "好きだ": ["좋아하다"],
+    "嫌いだ": ["싫다"],
+    "少ない": ["적다"],
+    "古い": ["낡다"],
+    "熱い": ["뜨겁다"],
+    "冷たい": ["차갑다"],
+    "狭い": ["좁다"],
+    "易しい": ["쉽다"],
+    "面白い": ["재미있다"],
     "上がる": ["오르다"],
     "上げる": ["올리다"],
     "上る": ["오르다"],
@@ -85,6 +95,52 @@ CANONICAL_MEANINGS = {
     "知る": ["알다"],
     "話す": ["말하다"],
     "鳴る": ["울다"],
+    "会う": ["만나다"],
+    "帰る": ["돌아가다"],
+    "歩く": ["걷다"],
+    "走る": ["달리다"],
+    "泳ぐ": ["헤엄치다"],
+    "休む": ["쉬다"],
+    "働く": ["일하다"],
+    "勉強する": ["공부하다"],
+    "教える": ["가르치다"],
+    "習う": ["배우다"],
+    "忘れる": ["잊다"],
+    "覚える": ["기억하다"],
+    "死ぬ": ["죽다"],
+    "生まれる": ["태어나다"],
+    "住む": ["살다"],
+    "乗る": ["타다"],
+    "降りる": ["내리다"],
+    "着る": ["입다"],
+    "履く": ["신다"],
+    "脱ぐ": ["벗다"],
+    "洗う": ["씻다"],
+    "磨く": ["닦다"],
+    "切る": ["자르다"],
+    "貸す": ["빌려주다"],
+    "借りる": ["빌리다"],
+    "返す": ["돌려주다"],
+    "送る": ["보내다"],
+    "開ける": ["열다"],
+    "開く": ["열리다"],
+    "閉める": ["닫다"],
+    "閉まる": ["닫히다"],
+    "立つ": ["서다"],
+    "座る": ["앉다"],
+    "暗い": ["어둡다"],
+    "明るい": ["밝다"],
+    "近い": ["가깝다"],
+    "遠い": ["멀다"],
+    "強い": ["강하다"],
+    "弱い": ["약하다"],
+    "太い": ["굵다"],
+    "細い": ["가늘다"],
+    "重い": ["무겁다"],
+    "軽い": ["가볍다"],
+    "甘い": ["달다"],
+    "辛い:からい": ["맵다"],
+    "辛い:つらい": ["괴롭다"],
 }
 INVALID_WORD_PATTERN = re.compile(r"[#…()[\]{}<>「」『』【】（）]")
 ALLOWED_TERM_PATTERN = re.compile(r"^[A-Za-z0-9\u3040-\u30ff\u3400-\u9fff\uff10-\uff5a々〆ヶー・･]+$")
@@ -193,10 +249,11 @@ def part_sort_key(value):
 
 def meaning_sort_key(record, meaning):
     rank = record["meaningRanks"].get(meaning, 9)
+    count = record["meaningCounts"].get(meaning, 0)
     has_affix_mark = meaning.startswith("-") or meaning.endswith("-")
     has_space = " " in meaning
     mixed = not re.fullmatch(r"[가-힣-]+", meaning)
-    return (rank, has_affix_mark, has_space, mixed, len(meaning), meaning)
+    return (rank, has_affix_mark, has_space, mixed, -count, len(meaning), meaning)
 
 
 def record_sort_key(record):
@@ -336,11 +393,13 @@ def main():
                                 "reading": reading,
                                 "meanings": [],
                                 "meaningRanks": {},
+                                "meaningCounts": {},
                                 "partsOfSpeech": [],
                                 "levels": [],
                             },
                         )
                         record["meanings"].append(korean)
+                        record["meaningCounts"][korean] = record["meaningCounts"].get(korean, 0) + 1
                         current_rank = record["meaningRanks"].get(korean, 9)
                         record["meaningRanks"][korean] = min(current_rank, level_rank(level))
                         record["partsOfSpeech"].append(part_of_speech)
